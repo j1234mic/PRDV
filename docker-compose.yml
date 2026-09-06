@@ -1,0 +1,47 @@
+# ============================================================
+# PRDV - stack de developpement : MySQL 8 + API Spring Boot
+#   docker compose up --build
+# Test rapide SANS Docker : mvn -pl prdv-app spring-boot:run -Dspring-boot.run.profiles=local
+#   (H2 en memoire + donnees de demo, cf. README)
+# ============================================================
+services:
+  db:
+    image: mysql:8.4
+    container_name: prdv-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: prdv-root
+      MYSQL_DATABASE: prdv
+      MYSQL_USER: prdv
+      MYSQL_PASSWORD: prdv
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - prdv-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pprdv-root"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    container_name: prdv-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:mysql://db:3306/prdv?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USER: prdv
+      DB_PASSWORD: prdv
+      SEED_DEMO_DATA: "true"        # comptes de demo via les use-cases
+      PRDV_TRANSPORT: log           # notifications tracees dans les logs (mail: config SMTP)
+      JWT_SECRET: cHJkdi1kZXYtc2VjcmV0LWNoYW5nZS1tZS0zMi1ieXRlcy1taW5pbXVtLTIwMjYt
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  prdv-db-data:

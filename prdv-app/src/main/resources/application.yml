@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: prdv-backend
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/prdv?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${DB_USER:prdv}
+    password: ${DB_PASSWORD:prdv}
+  jpa:
+    hibernate:
+      ddl-auto: none          # le schema appartient a Flyway, pas a Hibernate
+    open-in-view: false       # pas de session JPA implicite dans les threads HTTP
+  flyway:
+    enabled: true
+  mail:
+    host: ${SMTP_HOST:}       # vide => pas de JavaMailSender (mode log par defaut)
+
+server:
+  port: 8080
+  error:
+    include-message: always
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+prdv:
+  seed: ${SEED_DEMO_DATA:false}
+  integrations:
+    transport: ${PRDV_TRANSPORT:log}   # log | mail
+  otp:
+    validity: PT10M
+  security:
+    max-failed-attempts: 5
+    lock-duration: PT15M
+    jwt:
+      secret: ${JWT_SECRET:W+wvjtIETll3Wj0R/oAt47T7EpxQUkTA+yLRa54+ktS/HZ+/V/FTc37Y0QcQirTy}     # DEV ONLY - injecter un vrai secret en prod
+      access-ttl: PT15M
+      refresh-ttl: P14D
+      issuer: prdv-backend
+
+logging:
+  level:
+    com.prdv: INFO
