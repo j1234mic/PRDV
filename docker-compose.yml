@@ -1,7 +1,8 @@
-version: "3.9"
-
 # Base de donnees MySQL du module 1
 # Demarrage : docker compose up -d
+# Si un MySQL natif est deja actif sur la machine (port 3306 occupe),
+# demarrer sur un autre port hote : DB_PORT=13306 docker compose up -d
+# et lancer l'application avec la meme variable (DB_PORT=13306).
 services:
   mysql:
     image: mysql:8.4
@@ -13,7 +14,7 @@ services:
       MYSQL_USER: ${DB_USER:-prdv}
       MYSQL_PASSWORD: ${DB_PASSWORD:-root}
     ports:
-      - "3306:3306"
+      - "${DB_PORT:3306}:3306"
     command:
       - --default-authentication-plugin=caching_sha2_password
       - --character-set-server=utf8mb4
