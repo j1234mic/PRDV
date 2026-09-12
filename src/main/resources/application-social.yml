@@ -1,0 +1,27 @@
+# Profil "social" : connexion via reseaux sociaux / SSO d'entreprise (OAuth2 - OIDC)
+# Activation : --spring.profiles.active=social (en plus du profil par defaut)
+#
+# Exemples de fournisseurs :
+#   - Google, Facebook, Apple, Microsoft Azure AD (OIDC)
+#   - Keycloak / Okta / Azure AD B2C pour le SSO entreprise (OpenID Connect)
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope:
+              - openid
+              - email
+              - profile
+          # Exemple de SSO d'entreprise generique OIDC (Keycloak) - a decommenter
+          # keycloak:
+          #   client-id: ${KEYCLOAK_CLIENT_ID}
+          #   client-secret: ${KEYCLOAK_CLIENT_SECRET}
+          #   scope: openid
+          #   authorization-grant-type: authorization_code
+        # provider:
+          # keycloak:
+          #   issuer-uri: ${KEYCLOAK_ISSUER_URI}
