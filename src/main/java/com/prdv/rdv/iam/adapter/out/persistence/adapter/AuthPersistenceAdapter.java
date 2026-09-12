@@ -4,23 +4,19 @@ import com.prdv.rdv.iam.adapter.out.persistence.entity.AuditLogEntity;
 import com.prdv.rdv.iam.adapter.out.persistence.entity.OtpChallengeEntity;
 import com.prdv.rdv.iam.adapter.out.persistence.entity.RefreshTokenEntity;
 import com.prdv.rdv.iam.adapter.out.persistence.entity.SocialAccountEntity;
-import com.prdv.rdv.iam.adapter.out.persistence.entity.UserSessionEntity;
 import com.prdv.rdv.iam.adapter.out.persistence.mapper.AuthPersistenceMapper;
 import com.prdv.rdv.iam.adapter.out.persistence.repository.AuditLogJpaRepository;
 import com.prdv.rdv.iam.adapter.out.persistence.repository.OtpChallengeJpaRepository;
 import com.prdv.rdv.iam.adapter.out.persistence.repository.RefreshTokenJpaRepository;
 import com.prdv.rdv.iam.adapter.out.persistence.repository.SocialAccountJpaRepository;
-import com.prdv.rdv.iam.adapter.out.persistence.repository.UserSessionJpaRepository;
 import com.prdv.rdv.iam.application.port.output.AuditLogRepository;
 import com.prdv.rdv.iam.application.port.output.OtpChallengeRepository;
 import com.prdv.rdv.iam.application.port.output.RefreshTokenRepository;
 import com.prdv.rdv.iam.application.port.output.SocialAccountRepository;
-import com.prdv.rdv.iam.application.port.output.UserSessionRepository;
 import com.prdv.rdv.iam.domain.model.audit.AuditLog;
 import com.prdv.rdv.iam.domain.model.auth.OtpChallenge;
 import com.prdv.rdv.iam.domain.model.auth.RefreshToken;
 import com.prdv.rdv.iam.domain.model.auth.SocialAccount;
-import com.prdv.rdv.iam.domain.model.auth.UserSession;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
@@ -29,26 +25,29 @@ import java.util.Optional;
 
 /**
  * Adapteur JPA des agregats d'authentification : OTP, refresh tokens,
- * sessions, comptes sociaux et journal d'audit.
+ * comptes sociaux et journal d'audit.
+ *
+ * <p>Les sessions sont gerees par {@link UserSessionPersistenceAdapter} :
+ * {@code RefreshTokenRepository} et {@code UserSessionRepository} exposent
+ * toutes deux {@code findByUserId(Long)} avec des types de retour differents,
+ * ce qu'une meme classe Java ne peut pas implementer.
  */
 @Repository
 public class AuthPersistenceAdapter
         implements OtpChallengeRepository, RefreshTokenRepository,
-        UserSessionRepository, SocialAccountRepository, AuditLogRepository {
+        SocialAccountRepository, AuditLogRepository {
 
     private final OtpChallengeJpaRepository otpJpa;
     private final RefreshTokenJpaRepository refreshJpa;
-    private final UserSessionJpaRepository sessionJpa;
     private final SocialAccountJpaRepository socialJpa;
     private final AuditLogJpaRepository auditJpa;
     private final AuthPersistenceMapper mapper;
 
     public AuthPersistenceAdapter(OtpChallengeJpaRepository otpJpa, RefreshTokenJpaRepository refreshJpa,
-                                  UserSessionJpaRepository sessionJpa, SocialAccountJpaRepository socialJpa,
+                                  SocialAccountJpaRepository socialJpa,
                                   AuditLogJpaRepository auditJpa, AuthPersistenceMapper mapper) {
         this.otpJpa = otpJpa;
         this.refreshJpa = refreshJpa;
-        this.sessionJpa = sessionJpa;
         this.socialJpa = socialJpa;
         this.auditJpa = auditJpa;
         this.mapper = mapper;
@@ -96,33 +95,6 @@ public class AuthPersistenceAdapter
     @Override
     public List<RefreshToken> findByUserId(Long userId) {
         return refreshJpa.findByUserId(userId).stream().map(mapper::toDomain).toList();
-    }
-
-    // ------------------------------------------------------------- Session
-    @Override
-    public UserSession save(UserSession session) {
-        UserSessionEntity entity = session.getId() == null
-                ? new UserSessionEntity()
-                : sessionJpa.findById(session.getId()).orElseGet(UserSessionEntity::new);
-        UserSessionEntity mapped = mapper.toEntity(session);
-        mapped.setId(entity.getId());
-        return mapper.toDomain(sessionJpa.save(mapped));
-    }
-
-    @Override
-    public Optional<UserSession> findById(Long id) {
-        return sessionJpa.findById(id).map(mapper::toDomain);
-    }
-
-    @Override
-    public List<UserSession> findByUserId(Long userId) {
-        return sessionJpa.findByUserIdOrderByCreatedAtDesc(userId).stream().map(mapper::toDomain).toList();
-    }
-
-    @Override
-    public Optional<UserSession> findLatestActiveByUserId(Long userId) {
-        return sessionJpa.findTopByUserIdAndRevokedAtIsNullOrderByLastSeenAtDesc(userId)
-                .map(mapper::toDomain);
     }
 
     // -------------------------------------------------------------- Social

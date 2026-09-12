@@ -1,7 +1,6 @@
 package com.prdv.rdv.iam.adapter.out.persistence.adapter;
 
 import com.prdv.rdv.iam.adapter.out.persistence.entity.DelegationEntity;
-import com.prdv.rdv.iam.adapter.out.persistence.entity.PermissionEntity;
 import com.prdv.rdv.iam.adapter.out.persistence.entity.RoleEntity;
 import com.prdv.rdv.iam.adapter.out.persistence.mapper.AuthPersistenceMapper;
 import com.prdv.rdv.iam.adapter.out.persistence.mapper.UserPersistenceMapper;
@@ -9,10 +8,8 @@ import com.prdv.rdv.iam.adapter.out.persistence.repository.DelegationJpaReposito
 import com.prdv.rdv.iam.adapter.out.persistence.repository.PermissionJpaRepository;
 import com.prdv.rdv.iam.adapter.out.persistence.repository.RoleJpaRepository;
 import com.prdv.rdv.iam.application.port.output.DelegationRepository;
-import com.prdv.rdv.iam.application.port.output.PermissionRepository;
 import com.prdv.rdv.iam.application.port.output.RoleRepository;
 import com.prdv.rdv.iam.domain.model.auth.Delegation;
-import com.prdv.rdv.iam.domain.model.rbac.Permission;
 import com.prdv.rdv.iam.domain.model.rbac.Role;
 import org.springframework.stereotype.Repository;
 
@@ -23,8 +20,15 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+/**
+ * Adapteur JPA des roles et delegations.
+ *
+ * <p>Les permissions sont gerees par {@link PermissionPersistenceAdapter} :
+ * {@code RoleRepository} et {@code PermissionRepository} exposent toutes deux
+ * {@code findAll()} avec des types de retour differents.
+ */
 @Repository
-public class RbacPersistenceAdapter implements RoleRepository, PermissionRepository, DelegationRepository {
+public class RbacPersistenceAdapter implements RoleRepository, DelegationRepository {
 
     private final RoleJpaRepository roleJpa;
     private final PermissionJpaRepository permissionJpa;
@@ -68,34 +72,6 @@ public class RbacPersistenceAdapter implements RoleRepository, PermissionReposit
     @Override
     public Set<Role> findByNames(Collection<String> names) {
         return new HashSet<>(roleJpa.findByNameIn(names).stream().map(userMapper::toRoleDomain).toList());
-    }
-
-    // --------------------------------------------------------- Permission
-    @Override
-    public List<Permission> saveAll(Collection<Permission> permissions) {
-        return permissions.stream().map(p -> {
-            PermissionEntity entity = permissionJpa.findByCode(p.getCode()).orElseGet(PermissionEntity::new);
-            entity.setCode(p.getCode());
-            entity.setModule(p.getModule());
-            entity.setDescription(p.getDescription());
-            return userMapper.toPermissionDomain(permissionJpa.save(entity));
-        }).toList();
-    }
-
-    @Override
-    public Optional<Permission> findByCode(String code) {
-        return permissionJpa.findByCode(code).map(userMapper::toPermissionDomain);
-    }
-
-    @Override
-    public List<Permission> findAll() {
-        return permissionJpa.findAll().stream().map(userMapper::toPermissionDomain).toList();
-    }
-
-    @Override
-    public Set<Permission> findByCodes(Collection<String> codes) {
-        return new HashSet<>(permissionJpa.findByCodeIn(codes).stream()
-                .map(userMapper::toPermissionDomain).toList());
     }
 
     // --------------------------------------------------------- Delegation
