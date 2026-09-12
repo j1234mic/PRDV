@@ -1,0 +1,83 @@
+server:
+  port: 8080
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: prdv-rdv
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:prdv}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: false
+        jdbc:
+          time_zone: UTC
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+  # Notification email (optionnel) : si les variables MAIL_HOST / MAIL_USERNAME /
+  # MAIL_PASSWORD sont fournies via les variables d'environnement, configurez
+  # spring.mail.host, spring.mail.port (587), spring.mail.username, spring.mail.password.
+  # Sans SMTP, les OTP sont affiches dans les logs de l'application.
+
+# ---------------------------------------------------------------------------
+# Configuration metier du module IAM
+# ---------------------------------------------------------------------------
+prdv:
+  security:
+    jwt:
+      # 64 caracteres en dev ; en production passer par la variable JWT_SECRET
+      secret: ${JWT_SECRET:dev-only-secret-please-override-0123456789abcdefghijklmnop}
+      access-token-ttl-seconds: 900       # 15 minutes
+      challenge-token-ttl-seconds: 300    # 5 minutes (MFA / OTP etape 2)
+    refresh:
+      token-ttl-days: 14
+    login:
+      max-failed-attempts: 5
+      lock-duration-minutes: 15
+    otp:
+      ttl-seconds: 300
+      resend-cooldown-seconds: 60
+    cipher:
+      # Cle de chiffrement AES-GCM (une empreinte SHA-256 est derivee de cette valeur)
+      secret: ${CIPHER_SECRET:dev-cipher-secret-change-me-0123456789}
+    rate-limit:
+      login-attempts-per-minute: 10
+      otp-per-minute: 5
+  storage:
+    local-path: ${STORAGE_PATH:./storage/kyc}
+  admin:
+    email: ${ADMIN_EMAIL:superadmin@prdv.app}
+    password: ${ADMIN_PASSWORD:Admin#2026!}
+    first-name: Super
+    last-name: Administrator
+  frontend:
+    oauth-redirect-url: ${FRONTEND_OAUTH_URL:http://localhost:3000/auth/callback}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    com.prdv.rdv: INFO
+    org.springframework.security: WARN

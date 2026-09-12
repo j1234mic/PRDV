@@ -1,0 +1,185 @@
+### Parcours d'API — Module 1 (compatible IntelliJ HTTP Client / VS Code REST Client)
+@host = http://localhost:8080
+@base = {{host}}/api/v1
+
+### 1. Inscription patient (un OTP est affiché dans les logs)
+POST {{base}}/auth/register/patient
+Content-Type: application/json
+
+{
+  "email": "marie.dupont@example.com",
+  "phone": "+33612345678",
+  "password": "Azerty123",
+  "firstName": "Marie",
+  "lastName": "Dupont",
+  "birthDate": "1990-05-12",
+  "gender": "F"
+}
+
+### 2. Confirmer l'OTP recu par email (code visible dans les logs)
+POST {{base}}/auth/otp/verify
+Content-Type: application/json
+
+{
+  "target": "marie.dupont@example.com",
+  "code": "384921",
+  "channel": "EMAIL"
+}
+
+### 3. Connexion
+# @name login
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "marie.dupont@example.com",
+  "password": "Azerty123"
+}
+
+@accessToken = {{login.response.body.tokens.accessToken}}
+@refreshToken = {{login.response.body.tokens.refreshToken}}
+
+### 4. Profil connecte
+GET {{base}}/me
+Authorization: Bearer {{accessToken}}
+
+### 5. Activer la MFA TOTP
+POST {{base}}/auth/mfa/setup
+Authorization: Bearer {{accessToken}}
+
+### 6. Sessions connectees
+GET {{base}}/sessions
+Authorization: Bearer {{accessToken}}
+
+### 7. Inscription praticien (RPPS de test : 11 chiffres ou TEST*)
+POST {{base}}/practitioners/register
+Content-Type: application/json
+
+{
+  "email": "dr.dupont@example.com",
+  "phone": "+33611112233",
+  "password": "Azerty123",
+  "firstName": "Jean",
+  "lastName": "Dupont",
+  "specialty": "Cardiologie",
+  "rppsNumber": "10001234567",
+  "adeliNumber": "123456789",
+  "iban": "FR7630001007941234567890185"
+}
+
+### 8. Deposer une piece (diplome, RIB, assurance, contrat)
+POST {{base}}/practitioners/me/documents
+Authorization: Bearer {{accessToken}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary
+
+------WebKitFormBoundary
+Content-Disposition: form-data; name="type"
+
+DIPLOMA
+------WebKitFormBoundary
+Content-Disposition: form-data; name="file"; filename="diplome.pdf"
+Content-Type: application/pdf
+
+< ./diplome.pdf
+------WebKitFormBoundary--
+
+### 9. Accepter le contrat electronique d'adhesion
+POST {{base}}/practitioners/me/contract
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "version": "2026-09",
+  "contentHash": "sha256:abc123"
+}
+
+### 10. Inscription etablissement
+POST {{base}}/establishments/register
+Content-Type: application/json
+
+{
+  "email": "cabinet@example.com",
+  "phone": "+33699998877",
+  "password": "Azerty123",
+  "legalName": "Cabinet medical du Parc",
+  "siret": "81234567800012",
+  "address": "10 rue des Medecins, Paris",
+  "departments": ["Cardiologie", "Imagerie"]
+}
+
+### 11. Connexion super-admin
+# @name adminLogin
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "superadmin@prdv.app",
+  "password": "Admin#2026!"
+}
+
+@adminToken = {{adminLogin.response.body.tokens.accessToken}}
+
+### 12. Dossiers praticiens en attente de validation
+GET {{base}}/admin/practitioners/pending
+Authorization: Bearer {{adminToken}}
+
+### 13. Valider un dossier praticien
+POST {{base}}/admin/applications/2/review
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "approved": true,
+  "reason": "RPPS, diplome, RIB, assurance et contrat verifies"
+}
+
+### 14. Creer une secretaire rattachee au praticien #2
+POST {{base}}/practitioners/secretaries
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "email": "secretaire@example.com",
+  "firstName": "Julie",
+  "lastName": "Martin",
+  "supervisedPractitionerIds": [2],
+  "permissionCodes": ["agenda.read", "appointment.write", "appointment.cancel"]
+}
+
+### 15. Delegation temporaire de droits
+POST {{base}}/delegations
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "granteeUserId": 2,
+  "permissionCodes": ["billing.read"],
+  "reason": "Absence du gerant",
+  "validFrom": "2026-09-12T08:00:00Z",
+  "validUntil": "2026-09-19T20:00:00Z"
+}
+
+### 16. Journal d'audit
+GET {{base}}/admin/audit?page=0&size=20
+Authorization: Bearer {{adminToken}}
+
+### 17. Donnees analytics anonymisees
+GET {{base}}/admin/analytics/anonymized-users
+Authorization: Bearer {{adminToken}}
+
+### 18. Rafraichir les jetons (rotation)
+POST {{base}}/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+### 19. Deconnexion
+POST {{base}}/auth/logout
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
