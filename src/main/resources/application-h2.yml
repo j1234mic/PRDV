@@ -1,6 +1,7 @@
-# Profil h2 : base en memoire pour developpement sans Docker/MySQL.
+# Profil "h2" : base en memoire pour developpement sans Docker/MySQL.
 # Usage : mvn spring-boot:run -Dspring-boot.run.profiles=h2
 # ou :   SPRING_PROFILES_ACTIVE=h2 ./mvnw spring-boot:run
+# (Par defaut, application.yml utilise deja H2 fichier, ce profil force H2 memoire)
 spring:
   datasource:
     url: jdbc:h2:mem:prdv;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=MySQL
@@ -13,9 +14,13 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+    open-in-view: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
+        format_sql: false
+        jdbc:
+          time_zone: UTC
   h2:
     console:
       enabled: true
@@ -23,7 +28,10 @@ spring:
   sql:
     init:
       mode: always
+  docker:
+    compose:
+      enabled: false
 
 logging:
   level:
-    com.prdv.rdv: DEBUG
+    com.prdv.rdv: INFO
