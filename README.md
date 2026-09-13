@@ -33,6 +33,8 @@ classiques (Adapter, Strategy, Observer, Factory, Specification, Value Object…
 
 ## Démarrage rapide
 
+### Option A — Avec MySQL (recommandé pour la prod / intégration)
+
 ```bash
 # 1. Démarrer MySQL 8 (et Adminer sur http://localhost:8081)
 docker compose up -d
@@ -40,6 +42,47 @@ docker compose up -d
 # 2. Lancer l'application (http://localhost:8080)
 mvn spring-boot:run
 ```
+
+### Option B — Sans Docker, avec H2 en mémoire (développement rapide)
+
+Si MySQL n'est pas disponible ou que vous obtenez `Communications link failure`
+/ `Connexion refusée` au démarrage :
+
+```bash
+# Profil h2 : base H2 en mémoire, pas besoin de MySQL
+mvn spring-boot:run -Dspring-boot.run.profiles=h2
+
+# Ou profil dev (H2 + logs SQL + console H2 sur /h2-console)
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+Console H2 : http://localhost:8080/h2-console  
+JDBC URL : `jdbc:h2:mem:prdv` / user `sa` / pas de mot de passe.
+
+> Les deux profils `h2` et `dev` sont interchangeables et peuvent être combinés
+> avec `social` : `-Dspring-boot.run.profiles=h2,social`
+
+### Dépannage — `Communications link failure`
+
+```
+SQL Error: 0, SQLState: 08S01
+Communications link failure
+Caused by: java.net.ConnectException: Connexion refusée
+```
+
+Causes fréquentes :
+
+1. **MySQL non démarré** : `docker compose up -d` puis `docker compose ps`
+2. **Port 3306 occupé** par un MySQL natif :
+   ```bash
+   DB_PORT=13306 docker compose up -d
+   DB_PORT=13306 mvn spring-boot:run
+   ```
+3. **Variables d'environnement** : vérifiez `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`
+4. **Pas de Docker** : utilisez le profil `h2` / `dev` (voir Option B)
+
+Le dialecte Hibernate est désormais auto-détecté ; l'ancien
+`hibernate.dialect=MySQLDialect` explicite a été retiré pour permettre H2.
 
 Swagger UI : <http://localhost:8080/swagger-ui.html>
 

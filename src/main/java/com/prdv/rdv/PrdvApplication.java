@@ -22,6 +22,30 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 public class PrdvApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(PrdvApplication.class, args);
+        try {
+            SpringApplication.run(PrdvApplication.class, args);
+        } catch (Exception e) {
+            // Le FailureAnalyzer dedie affichera deja un message clair pour les erreurs MySQL,
+            // mais on ajoute un rappel minimal ici au cas ou l'analyseur ne serait pas charge.
+            Throwable root = e;
+            while (root.getCause() != null) {
+                root = root.getCause();
+            }
+            String msg = root.getMessage() != null ? root.getMessage().toLowerCase() : "";
+            if (msg.contains("communications link failure")
+                    || msg.contains("connexion refusée")
+                    || msg.contains("connection refused")
+                    || msg.contains("jdbcconnectionexception")) {
+                System.err.println("\n=================================================================");
+                System.err.println(" ERREUR : Impossible de se connecter a MySQL (Connexion refusee)");
+                System.err.println("=================================================================");
+                System.err.println(" 1) Demarrez MySQL : docker compose up -d");
+                System.err.println(" 2) Ou lancez sans MySQL avec H2 :");
+                System.err.println("    mvn spring-boot:run -Dspring-boot.run.profiles=h2");
+                System.err.println("    mvn spring-boot:run -Dspring-boot.run.profiles=dev");
+                System.err.println("=================================================================\n");
+            }
+            throw e;
+        }
     }
 }

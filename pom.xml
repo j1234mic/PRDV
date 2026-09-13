@@ -57,6 +57,13 @@
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Base H2 en memoire : permet de demarrer sans MySQL (profil h2 / dev).
+             Utile en local, CI, ou dans les environnements sans Docker. -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
 
         <!-- Notification email (JavaMailSender, actif seulement si spring.mail.host est configure) -->
         <dependency>

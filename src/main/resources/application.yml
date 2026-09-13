@@ -19,7 +19,9 @@ spring:
     open-in-view: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
+        # dialect auto-detecte (MySQL en prod, H2 en profil h2/dev).
+        # L'ancienne propriete MySQLDialect explicite cassait H2 et declenchait
+        # HHH90000025. Laissez Hibernate choisir.
         format_sql: false
         jdbc:
           time_zone: UTC
