@@ -20,6 +20,10 @@
     <properties>
         <java.version>17</java.version>
         <springdoc.version>2.6.0</springdoc.version>
+        <!-- Lombok : la version geree par Spring Boot 3.3.x (1.18.34) ne supporte pas
+             les JDK recents. 1.18.48 couvre JDK 17 a 26 ; sans cela le processeur
+             d'annotations echoue et aucun getter/setter n'est genere. -->
+        <lombok.version>1.18.48</lombok.version>
     </properties>
 
     <dependencies>
@@ -105,6 +109,12 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
+                    <!-- A partir du JDK 21/23, javac n'execute plus les processeurs
+                         d'annotations par defaut : sans -proc:full, Lombok ne genere
+                         rien et la compilation echoue en rafale sur des
+                         « cannot find symbol » (getId(), setStatus()...).
+                         (drapeau disponible depuis JDK 17.0.9 / 11.0.21 / 21) -->
+                    <proc>full</proc>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>

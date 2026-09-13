@@ -15,7 +15,9 @@ target/
 .DS_Store
 
 # Fichiers generes / secrets
-storage/
+# Repertoire d'upload KYC cree a l'execution (prdv.storage.local-path) :
+# ancre a la racine pour ne pas ignorer un package source nomme « storage ».
+/storage/
 *.log
 .env
 
