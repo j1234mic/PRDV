@@ -3,6 +3,9 @@
 # Si un MySQL natif est deja actif sur la machine (port 3306 occupe),
 # demarrer sur un autre port hote : DB_PORT=13306 docker compose up -d
 # et lancer l'application avec la meme variable (DB_PORT=13306).
+#
+# Alternative sans Docker (dev rapide) : mvn spring-boot:run -Dspring-boot.run.profiles=h2
+# Voir docs/TROUBLESHOOTING.md si vous obtenez "Communications link failure / Connexion refusee".
 services:
   mysql:
     image: mysql:8.4

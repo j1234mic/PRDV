@@ -56,6 +56,7 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                .headers(headers -> headers.frameOptions(frame -> frame.disable()))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/register/**",
                                 "/api/v1/auth/login", "/api/v1/auth/login/**",
@@ -66,6 +67,7 @@ public class SecurityConfig {
                                 "/api/v1/establishments/register").permitAll()
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers("/error", "/favicon.ico").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex

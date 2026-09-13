@@ -18,6 +18,11 @@ target/
 # Repertoire d'upload KYC cree a l'execution (prdv.storage.local-path) :
 # ancre a la racine pour ne pas ignorer un package source nomme « storage ».
 /storage/
+# Base H2 embarquée (mode fichier)
+/data/
+*.db
+*.mv.db
+*.trace.db
 *.log
 .env
 

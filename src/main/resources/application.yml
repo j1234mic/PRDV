@@ -5,11 +5,23 @@ server:
 spring:
   application:
     name: prdv-rdv
+  # ---------------------------------------------------------------------------
+  # Par defaut : H2 embarquee (fichier ./data/prdv) pour permettre un demarrage
+  # sans Docker. Pour utiliser MySQL, activer le profil "mysql" :
+  #   mvn spring-boot:run -Dspring-boot.run.profiles=mysql
+  # ou via variable d'environnement : SPRING_PROFILES_ACTIVE=mysql
+  # Le profil mysql demarre aussi automatiquement le conteneur MySQL si
+  # spring-boot-docker-compose est present et que Docker est disponible.
+  #
+  # Alternatives sans Docker (memoire) :
+  #   mvn spring-boot:run -Dspring-boot.run.profiles=h2      (H2 memoire)
+  #   mvn spring-boot:run -Dspring-boot.run.profiles=dev     (H2 memoire + logs SQL)
+  # ---------------------------------------------------------------------------
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:prdv}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
-    username: ${DB_USER:root}
-    password: ${DB_PASSWORD:root}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:h2:file:./data/prdv;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;AUTO_SERVER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
@@ -19,10 +31,16 @@ spring:
     open-in-view: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
+        # H2 par defaut ; MySQL auto-detecte ou explicite dans application-mysql.yml
+        # L'ancien MySQLDialect explicite dans le profil par defaut cassait H2 (HHH90000025)
+        dialect: org.hibernate.dialect.H2Dialect
         format_sql: false
         jdbc:
           time_zone: UTC
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
   jackson:
     serialization:
       write-dates-as-timestamps: false
@@ -31,6 +49,13 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 12MB
+  sql:
+    init:
+      mode: always
+  # Docker Compose : active seulement avec le profil mysql (voir application-mysql.yml)
+  docker:
+    compose:
+      enabled: false
   # Notification email (optionnel) : si les variables MAIL_HOST / MAIL_USERNAME /
   # MAIL_PASSWORD sont fournies via les variables d'environnement, configurez
   # spring.mail.host, spring.mail.port (587), spring.mail.username, spring.mail.password.
