@@ -5,11 +5,19 @@ server:
 spring:
   application:
     name: prdv-rdv
+  # ---------------------------------------------------------------------------
+  # Par défaut : H2 embarquée (fichier ./data/prdv) pour permettre un démarrage
+  # sans Docker. Pour utiliser MySQL, activer le profil "mysql" :
+  #   mvn spring-boot:run -Dspring-boot.run.profiles=mysql
+  # ou via variable d'environnement : SPRING_PROFILES_ACTIVE=mysql
+  # Le profil mysql démarre aussi automatiquement le conteneur MySQL si
+  # spring-boot-docker-compose est présent et que Docker est disponible.
+  # ---------------------------------------------------------------------------
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:prdv}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
-    username: ${DB_USER:root}
-    password: ${DB_PASSWORD:root}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:h2:file:./data/prdv;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;AUTO_SERVER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
@@ -19,10 +27,14 @@ spring:
     open-in-view: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
+        dialect: org.hibernate.dialect.H2Dialect
         format_sql: false
         jdbc:
           time_zone: UTC
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
   jackson:
     serialization:
       write-dates-as-timestamps: false
@@ -31,21 +43,28 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 12MB
+  sql:
+    init:
+      mode: always
+  # Docker Compose : activé seulement avec le profil mysql (voir application-mysql.yml)
+  docker:
+    compose:
+      enabled: false
   # Notification email (optionnel) : si les variables MAIL_HOST / MAIL_USERNAME /
   # MAIL_PASSWORD sont fournies via les variables d'environnement, configurez
   # spring.mail.host, spring.mail.port (587), spring.mail.username, spring.mail.password.
-  # Sans SMTP, les OTP sont affiches dans les logs de l'application.
+  # Sans SMTP, les OTP sont affichés dans les logs de l'application.
 
 # ---------------------------------------------------------------------------
-# Configuration metier du module IAM
+# Configuration métier du module IAM
 # ---------------------------------------------------------------------------
 prdv:
   security:
     jwt:
-      # 64 caracteres en dev ; en production passer par la variable JWT_SECRET
+      # 64 caractères en dev ; en production passer par la variable JWT_SECRET
       secret: ${JWT_SECRET:dev-only-secret-please-override-0123456789abcdefghijklmnop}
       access-token-ttl-seconds: 900       # 15 minutes
-      challenge-token-ttl-seconds: 300    # 5 minutes (MFA / OTP etape 2)
+      challenge-token-ttl-seconds: 300    # 5 minutes (MFA / OTP étape 2)
     refresh:
       token-ttl-days: 14
     login:
@@ -55,7 +74,7 @@ prdv:
       ttl-seconds: 300
       resend-cooldown-seconds: 60
     cipher:
-      # Cle de chiffrement AES-GCM (une empreinte SHA-256 est derivee de cette valeur)
+      # Clé de chiffrement AES-GCM (une empreinte SHA-256 est dérivée de cette valeur)
       secret: ${CIPHER_SECRET:dev-cipher-secret-change-me-0123456789}
     rate-limit:
       login-attempts-per-minute: 10

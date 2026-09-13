@@ -57,6 +57,18 @@
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Base embarquée H2 pour développement sans Docker -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- Support Docker Compose : démarrage auto de MySQL si Docker disponible -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-docker-compose</artifactId>
+            <optional>true</optional>
+        </dependency>
 
         <!-- Notification email (JavaMailSender, actif seulement si spring.mail.host est configure) -->
         <dependency>

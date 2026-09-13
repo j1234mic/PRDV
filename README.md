@@ -29,19 +29,77 @@ classiques (Adapter, Strategy, Observer, Factory, Specification, Value Object…
 
 - JDK **17+**
 - Maven **3.9+**
-- Docker & Docker Compose (pour MySQL 8)
+- Docker & Docker Compose (optionnel, pour MySQL 8) — sinon H2 embarquée est utilisée par défaut
 
 ## Démarrage rapide
+
+### Option A — Sans Docker (H2 embarquée, par défaut)
+
+Idéal pour démarrer rapidement ou quand Docker n'est pas disponible.
+Aucune base à installer : une base fichier `./data/prdv.mv.db` est créée automatiquement.
+
+```bash
+# Lancer directement (http://localhost:8080)
+mvn spring-boot:run
+```
+
+- H2 Console (debug) : http://localhost:8080/h2-console
+  - JDBC URL : `jdbc:h2:file:./data/prdv`
+  - User : `sa`, pas de mot de passe
+
+### Option B — Avec MySQL 8 (Docker)
+
+Recommandé pour se rapprocher de la production.
 
 ```bash
 # 1. Démarrer MySQL 8 (et Adminer sur http://localhost:8081)
 docker compose up -d
+# ou : DB_PORT=13306 docker compose up -d  (si le port 3306 est occupé)
 
-# 2. Lancer l'application (http://localhost:8080)
-mvn spring-boot:run
+# 2. Lancer l'application en profil mysql (http://localhost:8080)
+mvn spring-boot:run -Dspring-boot.run.profiles=mysql
+# Si le port MySQL a été changé :
+# DB_PORT=13306 mvn spring-boot:run -Dspring-boot.run.profiles=mysql
 ```
 
+> Grâce à `spring-boot-docker-compose`, si Docker est disponible, le conteneur
+> `prdv-mysql` démarre automatiquement même sans `docker compose up -d` quand le
+> profil `mysql` est actif.
+
 Swagger UI : <http://localhost:8080/swagger-ui.html>
+
+### Dépannage — `Communications link failure`
+
+Si vous voyez :
+
+```
+Communications link failure
+The last packet sent successfully to the server was 0 milliseconds ago.
+Connexion refusée
+...
+Unable to open JDBC Connection for DDL execution
+```
+
+C'est que MySQL n'est pas démarré ou inaccessible.
+
+Solutions :
+1. **Utiliser H2 par défaut** (plus simple) :
+   ```bash
+   mvn spring-boot:run
+   # ou explicitement :
+   mvn spring-boot:run -Dspring-boot.run.profiles=h2
+   ```
+2. **Démarrer MySQL via Docker** :
+   ```bash
+   docker compose up -d
+   mvn spring-boot:run -Dspring-boot.run.profiles=mysql
+   ```
+3. **Port 3306 déjà occupé** (MySQL natif installé) :
+   ```bash
+   DB_PORT=13306 docker compose up -d
+   DB_PORT=13306 mvn spring-boot:run -Dspring-boot.run.profiles=mysql
+   ```
+4. **Vérifier les variables** `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` si vous utilisez un MySQL externe.
 
 Au démarrage, le catalogue de permissions, les rôles systèmes et un compte
 **super-administrateur** sont créés :
