@@ -17,7 +17,7 @@ services:
       MYSQL_USER: ${DB_USER:-prdv}
       MYSQL_PASSWORD: ${DB_PASSWORD:-root}
     ports:
-      - "${DB_PORT:3306}:3306"
+      - "${DB_PORT:-3306}:3306"
     command:
       - --default-authentication-plugin=caching_sha2_password
       - --character-set-server=utf8mb4
