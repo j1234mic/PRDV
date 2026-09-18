@@ -1,11 +1,13 @@
 package com.prdv.rdv.iam.domain.model.user;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Locale;
 
 /**
  * Profil patient. Gere egalement le rattachement d'un mineur a un parent/tuteur
@@ -15,7 +17,41 @@ import java.time.LocalDate;
 @Setter
 public class PatientProfile {
 
-    public enum Gender { M, F, OTHER }
+    public enum Gender {
+        M, F, OTHER;
+
+        /**
+         * Deserialisation tolerante : accepte les valeurs canoniques (M, F, OTHER)
+         * ainsi que leurs alias usuels (MALE, FEMALE, HOMME, FEMME...), sans
+         * distinction de casse. La valeur canonique reste utilisee pour la
+         * serialisation et la persistance.
+         */
+        @JsonCreator
+        public static Gender from(String value) {
+            if (value == null) {
+                return null;
+            }
+            switch (value.trim().toUpperCase(Locale.ROOT)) {
+                case "M":
+                case "MALE":
+                case "MAN":
+                case "HOMME":
+                    return M;
+                case "F":
+                case "FEMALE":
+                case "WOMAN":
+                case "FEMME":
+                    return F;
+                case "OTHER":
+                case "AUTRE":
+                case "X":
+                    return OTHER;
+                default:
+                    throw new IllegalArgumentException("Valeur de gender invalide : \"" + value
+                            + "\" (valeurs acceptees : M, F, OTHER)");
+            }
+        }
+    }
 
     public enum KycLevel {
         /** Aucune verification. */
