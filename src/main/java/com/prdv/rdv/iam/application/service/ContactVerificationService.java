@@ -8,6 +8,7 @@ import com.prdv.rdv.iam.application.result.Views;
 import com.prdv.rdv.iam.application.service.support.AuditLogger;
 import com.prdv.rdv.iam.application.service.support.OtpIssuer;
 import com.prdv.rdv.iam.application.service.support.RegistrationSupport;
+import com.prdv.rdv.iam.application.service.support.TransactionalStateSaver;
 import com.prdv.rdv.iam.application.service.support.ViewMapper;
 import com.prdv.rdv.iam.domain.exception.IamErrorCode;
 import com.prdv.rdv.iam.domain.exception.IamException;
@@ -31,6 +32,7 @@ public class ContactVerificationService implements ContactVerificationUseCase {
     private final UserRepository userRepository;
     private final PatientProfileRepository patientProfileRepository;
     private final OtpIssuer otpIssuer;
+    private final TransactionalStateSaver stateSaver;
     private final ViewMapper viewMapper;
     private final AuditLogger auditLogger;
     private final Clock clock;
@@ -38,10 +40,12 @@ public class ContactVerificationService implements ContactVerificationUseCase {
     public ContactVerificationService(UserRepository userRepository,
                                       PatientProfileRepository patientProfileRepository,
                                       OtpIssuer otpIssuer,
+                                      TransactionalStateSaver stateSaver,
                                       ViewMapper viewMapper, AuditLogger auditLogger, Clock clock) {
         this.userRepository = userRepository;
         this.patientProfileRepository = patientProfileRepository;
         this.otpIssuer = otpIssuer;
+        this.stateSaver = stateSaver;
         this.viewMapper = viewMapper;
         this.auditLogger = auditLogger;
         this.clock = clock;
@@ -59,6 +63,8 @@ public class ContactVerificationService implements ContactVerificationUseCase {
             throw IamException.of(IamErrorCode.VALIDATION_ERROR, "Aucune verification en attente pour ce compte");
         }
 
+        // verifyLatest persiste deja le challenge en REQUIRES_NEW (tentatives,
+        // consumed). S'il echoue, l'OtpChallenge est correctement marque.
         otpIssuer.verifyLatest(target, OtpChallenge.Purpose.REGISTRATION, command.code());
 
         if (command.channel() == OtpChallenge.Channel.EMAIL) {

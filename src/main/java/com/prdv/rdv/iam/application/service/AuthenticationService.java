@@ -48,6 +48,7 @@ public class AuthenticationService implements AuthenticationUseCase {
     private final FraudDetectionPort fraudDetection;
     private final OtpIssuer otpIssuer;
     private final TokenIssuanceSupport tokenIssuance;
+    private final TransactionalStateSaver stateSaver;
     private final DomainEventPublisher eventPublisher;
     private final AuditLogger auditLogger;
     private final IamProperties properties;
@@ -57,6 +58,7 @@ public class AuthenticationService implements AuthenticationUseCase {
                                  RefreshTokenRepository refreshTokenRepository, PasswordHasher passwordHasher,
                                  JwtTokenPort jwtTokenPort, TotpPort totpPort, FraudDetectionPort fraudDetection,
                                  OtpIssuer otpIssuer, TokenIssuanceSupport tokenIssuance,
+                                 TransactionalStateSaver stateSaver,
                                  DomainEventPublisher eventPublisher, AuditLogger auditLogger,
                                  IamProperties properties, Clock clock) {
         this.userRepository = userRepository;
@@ -68,6 +70,7 @@ public class AuthenticationService implements AuthenticationUseCase {
         this.fraudDetection = fraudDetection;
         this.otpIssuer = otpIssuer;
         this.tokenIssuance = tokenIssuance;
+        this.stateSaver = stateSaver;
         this.eventPublisher = eventPublisher;
         this.auditLogger = auditLogger;
         this.properties = properties;
@@ -159,12 +162,15 @@ public class AuthenticationService implements AuthenticationUseCase {
         RefreshToken stored = refreshTokenRepository.findByTokenHash(passwordHasher.digest(cmd.refreshToken()))
                 .orElseThrow(() -> IamException.of(IamErrorCode.TOKEN_INVALID, "Jeton de rafraichissement inconnu"));
 
-        // Detection de reutilisation : revoquer toute la famille (theorie du jeton vole)
+        // Detection de reutilisation : revoquer toute la famille (theorie du jeton vole).
+        // Sauvegarde en REQUIRES_NEW via stateSaver : les revocations doivent
+        // persister malgre l'exception fonctionnelle qui provoque le rollback
+        // de la transaction appelante.
         if (stored.isRevoked()) {
             refreshTokenRepository.findAllByFamily(stored.getFamily()).forEach(t -> {
                 if (!t.isRevoked()) {
                     t.revoke(clock);
-                    refreshTokenRepository.save(t);
+                    stateSaver.saveRefreshToken(t);
                 }
             });
             auditLogger.failure(stored.getUserId(), AuditLog.Action.LOGIN_FAILED,
@@ -199,7 +205,10 @@ public class AuthenticationService implements AuthenticationUseCase {
         int max = properties.getSecurity().getLogin().getMaxFailedAttempts();
         Duration lock = Duration.ofMinutes(properties.getSecurity().getLogin().getLockDurationMinutes());
         user.recordFailedLogin(max, lock, clock);
-        User saved = userRepository.save(user);
+        // Sauvegarde dans une transaction independante : l'etat (failedAttempts,
+        // LOCKED) doit persister malgre l'exception INVALID_CREDENTIALS qui
+        // provoque le rollback de la transaction appelante.
+        User saved = stateSaver.saveUser(user);
         AuditLog.Action action = saved.getStatus() == com.prdv.rdv.iam.domain.model.user.AccountStatus.LOCKED
                 ? AuditLog.Action.ACCOUNT_LOCKED : AuditLog.Action.LOGIN_FAILED;
         auditLogger.failure(user.getId(), action, "echec de connexion (mot de passe)", ip);
