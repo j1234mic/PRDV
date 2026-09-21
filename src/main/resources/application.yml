@@ -16,9 +16,19 @@ spring:
   # Alternatives sans Docker (memoire) :
   #   mvn spring-boot:run -Dspring-boot.run.profiles=h2      (H2 memoire)
   #   mvn spring-boot:run -Dspring-boot.run.profiles=dev     (H2 memoire + logs SQL)
+  #
+  # ATTENTION : H2 2.x REFUSE la combinaison AUTO_SERVER=TRUE + DB_CLOSE_ON_EXIT=FALSE
+  # dans l'URL JDBC et echoue au demarrage avec :
+  #   Feature not supported: "AUTO_SERVER=TRUE && DB_CLOSE_ON_EXIT=FALSE" [50100 / HYC00]
+  # (le mode mixed/auto-server exige que H2 puisse poser son shutdown hook).
+  # La console H2 integree (/h2-console) fonctionne sans AUTO_SERVER : elle tourne
+  # dans le meme JVM que l'application et se rattache a la base deja ouverte.
+  # Pour ouvrir ./data/prdv.mv.db depuis un OUTIL EXTERNE (DBeaver, IntelliJ...) pendant
+  # que l'application tourne, utiliser le mixed mode SANS DB_CLOSE_ON_EXIT=FALSE :
+  #   SPRING_DATASOURCE_URL='jdbc:h2:file:./data/prdv;MODE=MySQL;DB_CLOSE_DELAY=-1;AUTO_SERVER=TRUE' mvn spring-boot:run
   # ---------------------------------------------------------------------------
   datasource:
-    url: jdbc:h2:file:./data/prdv;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;AUTO_SERVER=TRUE
+    url: jdbc:h2:file:./data/prdv;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     username: sa
     password:
     driver-class-name: org.h2.Driver
