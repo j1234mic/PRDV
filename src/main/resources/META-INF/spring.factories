@@ -1,0 +1,6 @@
+# Spring Boot 3 charge les FailureAnalyzer via SpringFactoriesLoader, qui lit
+# exclusivement META-INF/spring.factories (le format META-INF/spring/<interface>
+# ne sert qu'aux AutoConfiguration.imports) : sans ce fichier, l'analyseur n'est
+# jamais instancie et aucun message d'aide n'est affiche au demarrage.
+org.springframework.boot.diagnostics.FailureAnalyzer=\
+com.prdv.rdv.common.web.DatabaseConnectionFailureAnalyzer

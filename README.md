@@ -48,6 +48,19 @@ mvn spring-boot:run
   - User : `sa`, pas de mot de passe
 - Swagger UI : http://localhost:8080/swagger-ui.html
 
+> ⚠️ H2 2.x **refuse** `AUTO_SERVER=TRUE` combiné à `DB_CLOSE_ON_EXIT=FALSE`
+> (`Feature not supported: "AUTO_SERVER=TRUE && DB_CLOSE_ON_EXIT=FALSE" [50100]`) :
+> l'URL par défaut n'utilise donc pas `AUTO_SERVER`. La console H2 intégrée n'en a pas
+> besoin (elle tourne dans le même JVM et se rattache à la base déjà ouverte).
+>
+> Pour ouvrir `./data/prdv.mv.db` depuis un **outil externe** (DBeaver, IntelliJ…)
+> pendant que l'application tourne, passez en « mixed mode » **sans**
+> `DB_CLOSE_ON_EXIT=FALSE` :
+>
+> ```bash
+> SPRING_DATASOURCE_URL='jdbc:h2:file:./data/prdv;MODE=MySQL;DB_CLOSE_DELAY=-1;AUTO_SERVER=TRUE' mvn spring-boot:run
+> ```
+
 ### Option B — Avec MySQL 8 (Docker) — proche prod
 
 Recommandé pour se rapprocher de la production.
@@ -84,6 +97,36 @@ JDBC URL mémoire : `jdbc:h2:mem:prdv` / user `sa` / pas de mot de passe.
 
 > Les profils `h2`, `dev`, `mysql` et `social` sont combinables :
 > `-Dspring-boot.run.profiles=h2,social` ou `mysql,social`
+
+### Dépannage — `Feature not supported: "AUTO_SERVER=TRUE && DB_CLOSE_ON_EXIT=FALSE"`
+
+Erreur H2 `[50100-224]` (SQLState `HYC00`) au démarrage :
+
+```
+ERROR o.h.engine.jdbc.spi.SqlExceptionHelper : Fonctionnalité non supportée: "AUTO_SERVER=TRUE && DB_CLOSE_ON_EXIT=FALSE"
+Caused by: org.h2.jdbc.JdbcSQLFeatureNotSupportedException
+...
+Failed to initialize JPA EntityManagerFactory ... Unable to build Hibernate SessionFactory
+```
+
+H2 2.x n'autorise pas le mode « mixed/auto-server » quand `DB_CLOSE_ON_EXIT=FALSE`
+est demandé. Choisissez l'un des deux :
+
+```bash
+# (défaut du dépôt) base fichier, un seul processus
+# jdbc:h2:file:./data/prdv;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+mvn spring-boot:run
+
+# ou mixed mode (accès depuis DBeaver/IntelliJ pendant que l'app tourne), SANS DB_CLOSE_ON_EXIT
+SPRING_DATASOURCE_URL='jdbc:h2:file:./data/prdv;MODE=MySQL;DB_CLOSE_DELAY=-1;AUTO_SERVER=TRUE' mvn spring-boot:run
+
+# ou base en mémoire (aucun fichier)
+mvn spring-boot:run -Dspring-boot.run.profiles=h2
+```
+
+Vérifiez aussi qu'aucune surcharge locale (`SPRING_DATASOURCE_URL`,
+`-Dspring-boot.run.arguments=--spring.datasource.url=…`) ne réintroduit les deux
+paramètres à la fois. Détails : [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 ### Dépannage — `Communications link failure` / `Connexion refusée`
 
@@ -125,7 +168,8 @@ Solutions :
 
 Le détail complet est dans [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 Un `DatabaseConnectionFailureAnalyzer` affiche désormais un message d'aide directement
-au démarrage en cas d'échec MySQL.
+au démarrage en cas d'échec de connexion (MySQL injoignable, URL H2 invalide, fichier
+H2 verrouillé).
 
 Swagger UI : <http://localhost:8080/swagger-ui.html>
 
