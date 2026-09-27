@@ -65,6 +65,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/practitioners/register",
                                 "/api/v1/establishments/register").permitAll()
+                        // Module 2 : annuaire des praticiens consultable sans compte
+                        // (la notation d'un praticien reste authentifiee : seul GET est ouvert)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/directory/**").permitAll()
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()

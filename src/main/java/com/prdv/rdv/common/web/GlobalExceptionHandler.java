@@ -2,6 +2,8 @@ package com.prdv.rdv.common.web;
 
 import com.prdv.rdv.iam.domain.exception.IamErrorCode;
 import com.prdv.rdv.iam.domain.exception.IamException;
+import com.prdv.rdv.profile.domain.exception.ProfileErrorCode;
+import com.prdv.rdv.profile.domain.exception.ProfileException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
@@ -30,6 +32,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IamException.class)
     public ResponseEntity<ApiError> handleIam(IamException ex, HttpServletRequest request) {
         IamErrorCode code = ex.getErrorCode();
+        return ResponseEntity.status(code.getHttpStatus())
+                .body(ApiError.of(code.getHttpStatus(), code.name(), ex.getMessage(), request.getRequestURI()));
+    }
+
+    @ExceptionHandler(ProfileException.class)
+    public ResponseEntity<ApiError> handleProfile(ProfileException ex, HttpServletRequest request) {
+        ProfileErrorCode code = ex.getErrorCode();
         return ResponseEntity.status(code.getHttpStatus())
                 .body(ApiError.of(code.getHttpStatus(), code.name(), ex.getMessage(), request.getRequestURI()));
     }

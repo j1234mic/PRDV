@@ -15,7 +15,7 @@
     <artifactId>prdv-rdv</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <name>PRDV - Prises de rendez-vous medicaux</name>
-    <description>Module 1 : Gestion des utilisateurs et authentification - Architecture hexagonale</description>
+    <description>Module 1 : utilisateurs &amp; authentification - Module 2 : profils &amp; gestion des donnees - Architecture hexagonale</description>
 
     <properties>
         <java.version>17</java.version>

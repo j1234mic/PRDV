@@ -57,8 +57,9 @@ spring:
     default-property-inclusion: non_null
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 12MB
+      # Module 2 : documents medicaux jusqu'a 25 Mo (prdv.profile.documents.max-bytes)
+      max-file-size: 26MB
+      max-request-size: 30MB
   sql:
     init:
       mode: always
@@ -104,6 +105,33 @@ prdv:
     last-name: Administrator
   frontend:
     oauth-redirect-url: ${FRONTEND_OAUTH_URL:http://localhost:3000/auth/callback}
+  # -------------------------------------------------------------------------
+  # Module 2 : profils & gestion des donnees
+  # -------------------------------------------------------------------------
+  profile:
+    documents:
+      max-bytes: 26214400            # 25 Mo (PDF, JPG, PNG, DICOM)
+      folder: medical-documents      # sous-dossier du stockage local
+      reminder-lookahead-days: 60    # fenetre des rappels de vaccination
+    media:
+      max-photo-bytes: 5242880       # 5 Mo (photo de profil, photo de cabinet)
+      max-video-bytes: 104857600     # 100 Mo (video de presentation)
+      patient-folder: patient-media
+      practitioner-folder: practitioner-media
+      location-folder: practice-locations
+    health:
+      default-sync-window-days: 30   # fenetre par defaut d'une synchronisation
+      max-metrics-per-query: 2000    # borne des series tracees
+      max-metrics-per-batch: 500     # borne d'un import par lot
+    consent:
+      policy-version: "2026-09"      # version de la politique RGPD opposee comme preuve
+    dmp:
+      # false = passerelle de simulation (journalisee). true = une passerelle
+      # reelle « Mon espace sante » doit etre fournie (aucune n'est livree ici).
+      enabled: false
+    storage:
+      # Racine du stockage des documents et medias du module 2 (distincte du KYC)
+      local-path: ${PROFILE_STORAGE_PATH:./storage/profile}
 
 springdoc:
   swagger-ui:

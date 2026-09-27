@@ -1,0 +1,796 @@
+### Parcours d'API — Module 2 : profils & gestion des donnees
+### (compatible IntelliJ HTTP Client / VS Code REST Client)
+###
+### Prérequis : avoir créé un patient et un praticien (voir docs/api-m1.http).
+### Les permissions du module 2 sont amorcées par `DataSeeder` : si la base
+### existe déjà, supprimer `./data/prdv.mv.db` pour rejouer l'amorçage des rôles.
+
+@host = http://localhost:8080
+@base = {{host}}/api/v1
+
+### 1. Connexion patient
+# @name loginPatient
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "marie.dupont@example.com",
+  "password": "Azerty123"
+}
+
+@patientToken = {{loginPatient.response.body.tokens.accessToken}}
+
+### 2. Connexion praticien
+# @name loginPractitioner
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "dr.dupont@example.com",
+  "password": "Azerty123"
+}
+
+@practitionerToken = {{loginPractitioner.response.body.tokens.accessToken}}
+
+### Identifiants utilisateur (renseignés depuis `GET {{base}}/me` de chaque compte)
+@patientUserId = 1
+@practitionerUserId = 2
+
+###############################################################################
+### 2.1 PROFIL PATIENT — informations personnelles
+###############################################################################
+
+### 3. État civil complet
+PUT {{base}}/profile/civil-status
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "civility": "MME",
+  "firstName": "Marie",
+  "birthName": "Martin",
+  "lastName": "Dupont",
+  "preferredName": "Marie",
+  "birthDate": "1990-05-12",
+  "birthPlace": "Lille",
+  "birthCountry": "France",
+  "gender": "F",
+  "maritalStatus": "MARRIED",
+  "nationality": "Française"
+}
+
+### 4. Coordonnées multiples (fixe, mobile, pro, email)
+PUT {{base}}/profile/contacts
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "contacts": [
+    { "type": "MOBILE", "value": "+33612345678", "verified": true, "preferred": true },
+    { "type": "HOME", "value": "+33320123456", "verified": false, "preferred": false },
+    { "type": "WORK", "value": "+33144556677", "verified": false, "preferred": false },
+    { "type": "EMAIL", "value": "marie.dupont@example.com", "verified": true, "preferred": false }
+  ]
+}
+
+### 5. Adresses multiples (domicile, travail)
+PUT {{base}}/profile/addresses
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "addresses": [
+    {
+      "type": "HOME", "line1": "12 rue des Lilas", "postalCode": "59000",
+      "city": "Lille", "country": "France", "isDefault": true
+    },
+    {
+      "type": "WORK", "line1": "3 place de la République", "postalCode": "75003",
+      "city": "Paris", "country": "France", "isDefault": false
+    }
+  ]
+}
+
+### 6. Personne à prévenir en cas d'urgence
+PUT {{base}}/profile/emergency-contact
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "firstName": "Paul",
+  "lastName": "Dupont",
+  "relationship": "Conjoint",
+  "phone": "+33698765432",
+  "email": "paul.dupont@example.com"
+}
+
+### 7. Médecin traitant déclaré
+PUT {{base}}/profile/treating-physician
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "firstName": "Jean",
+  "lastName": "Dupont",
+  "rppsNumber": "10001234567",
+  "phone": "+33320998877",
+  "email": "cabinet.dupont@example.com",
+  "declaredToInsurance": true
+}
+
+### 8. Numéro de sécurité sociale (tokenisé + masqué : la valeur brute n'est jamais renvoyée)
+POST {{base}}/profile/social-security-number
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{ "value": "2900559123456 16" }
+
+### 9. Mutuelle principale puis complémentaire
+PUT {{base}}/profile/insurances
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "type": "PRINCIPAL",
+  "organization": "Assurance Maladie",
+  "memberNumber": "123456789",
+  "contractReference": null,
+  "validUntil": null
+}
+
+PUT {{base}}/profile/insurances
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "type": "COMPLEMENTARY",
+  "organization": "MGEN",
+  "memberNumber": "MG-998877",
+  "contractReference": "COLLECTIF-2026",
+  "validUntil": "2027-12-31"
+}
+
+### 10. Photo de profil (multipart ; adapter le chemin du fichier)
+POST {{base}}/profile/photo
+Authorization: Bearer {{patientToken}}
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="photo.jpg"
+Content-Type: image/jpeg
+
+< ./files/photo.jpg
+--WebAppBoundary--
+
+### 11. Pièce d'identité (stockage hors base, accès audité)
+POST {{base}}/profile/identity-document
+Authorization: Bearer {{patientToken}}
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="cni.pdf"
+Content-Type: application/pdf
+
+< ./files/cni.pdf
+--WebAppBoundary--
+
+### 12. Carte Vitale : lecture NFC (scan optionnel)
+POST {{base}}/profile/vitale-card
+Authorization: Bearer {{patientToken}}
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="card"
+Content-Type: application/json
+
+{
+  "nir": "290055912345616",
+  "cardVersion": "v1.4",
+  "issuedOn": "2023-04-01",
+  "expiresOn": "2033-04-01",
+  "readMode": "NFC"
+}
+--WebAppBoundary--
+
+### 13. Rattachement au DMP national puis activation du partage
+POST {{base}}/profile/dmp/link
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{ "dmpIdentifier": "DMP-42-1a2b3c4d", "sharingEnabled": false }
+
+PUT {{base}}/profile/dmp/sharing
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{ "sharingEnabled": true }
+
+### 14. Profil patient complet (vue consolidée)
+GET {{base}}/profile/me
+Authorization: Bearer {{patientToken}}
+
+###############################################################################
+### 2.1 DOSSIER MÉDICAL PERSONNEL
+###############################################################################
+
+### 15. Groupe sanguin
+PUT {{base}}/medical-record/{{patientUserId}}/blood-group
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{ "value": "A+" }
+
+### 16. Antécédent médical structuré
+POST {{base}}/medical-record/{{patientUserId}}/history
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "code": "I10",
+  "label": "Hypertension artérielle",
+  "diagnosedOn": "2019-03-14",
+  "status": "MONITORED",
+  "note": "Traitement de fond",
+  "source": "Cardiologue"
+}
+
+### 17. Antécédent familial
+POST {{base}}/medical-record/{{patientUserId}}/family-history
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "relation": "FATHER",
+  "condition": "Diabète de type 2",
+  "relativeAgeAtDiagnosis": 52,
+  "note": null
+}
+
+### 18. Allergie
+POST {{base}}/medical-record/{{patientUserId}}/allergies
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "allergen": "Pénicilline",
+  "type": "DRUG",
+  "severity": "SEVERE",
+  "reaction": "Œdème de Quincke",
+  "declaredOn": "2015-06-01"
+}
+
+### 19. Vaccination avec rappel
+POST {{base}}/medical-record/{{patientUserId}}/vaccinations
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "vaccine": "DTP",
+  "dose": "Rappel",
+  "administeredOn": "2016-09-10",
+  "nextReminderOn": "2026-09-10",
+  "provider": "Centre de vaccination Lille",
+  "mandatory": false
+}
+
+### 20. Rappels de vaccination (échus ou à venir sous 60 jours)
+GET {{base}}/medical-record/{{patientUserId}}/vaccination-reminders?lookaheadDays=60
+Authorization: Bearer {{patientToken}}
+
+### 21. Maladie chronique
+POST {{base}}/medical-record/{{patientUserId}}/chronic-conditions
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "code": "E11",
+  "label": "Diabète de type 2",
+  "since": "2021-01-15",
+  "longTermCondition": true,
+  "note": "Suivi trimestriel HbA1c"
+}
+
+### 22. Traitement en cours
+POST {{base}}/medical-record/{{patientUserId}}/treatments
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "drug": "Metformine 1000 mg",
+  "dosage": "2 par jour",
+  "frequency": "Matin et soir",
+  "prescriber": "Dr Dupont",
+  "startedOn": "2021-02-01",
+  "note": null
+}
+
+### 23. Chirurgie passée
+POST {{base}}/medical-record/{{patientUserId}}/surgeries
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "procedure": "Appendicectomie",
+  "performedOn": "2012-07-19",
+  "establishment": "CHU Lille",
+  "surgeon": "Dr Martin",
+  "note": "Cœlioscopie"
+}
+
+### 24. Hospitalisation
+POST {{base}}/medical-record/{{patientUserId}}/hospitalizations
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "reason": "Pneumopathie aiguë",
+  "establishment": "CHU Lille",
+  "admittedOn": "2024-02-03",
+  "dischargedOn": "2024-02-08",
+  "note": null
+}
+
+### 25. Handicap / limitation
+POST {{base}}/medical-record/{{patientUserId}}/disabilities
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "type": "VISUAL",
+  "disabilityRatePercent": 45,
+  "aids": ["Lunettes de correction", "Loupe"],
+  "note": null
+}
+
+### 26. Constantes vitales (l'IMC est calculé par le domaine)
+POST {{base}}/medical-record/{{patientUserId}}/vital-signs
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "systolicMmHg": 138,
+  "diastolicMmHg": 86,
+  "heartRateBpm": 72,
+  "temperatureCelsius": 36.8,
+  "oxygenSaturationPercent": 98,
+  "respiratoryRatePerMin": 14,
+  "heightCm": 168,
+  "weightKg": 64.5
+}
+
+### 27. Dossier médical complet
+GET {{base}}/medical-record/{{patientUserId}}
+Authorization: Bearer {{patientToken}}
+
+###############################################################################
+### 2.1 DOCUMENTS MÉDICAUX
+###############################################################################
+
+### 28. Téléversement (classification automatique + OCR)
+# @name uploadDocument
+POST {{base}}/documents
+Authorization: Bearer {{patientToken}}
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="document"
+Content-Type: application/json
+
+{
+  "title": "Résultats d'analyses du 12/09",
+  "category": null,
+  "dicomModality": null,
+  "dicomStudyDescription": null
+}
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="analyses.pdf"
+Content-Type: application/pdf
+
+< ./files/analyses.pdf
+--WebAppBoundary--
+
+@documentId = {{uploadDocument.response.body.id}}
+
+### 29. Mes documents (filtre par catégorie possible)
+GET {{base}}/documents?category=LAB_RESULT
+Authorization: Bearer {{patientToken}}
+
+### 30. Requalification manuelle (correction de l'IA)
+PUT {{base}}/documents/{{documentId}}/category
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{ "category": "LAB_RESULT" }
+
+### 31. Nouvelle version (la précédente reste consultable)
+POST {{base}}/documents/{{documentId}}/versions
+Authorization: Bearer {{patientToken}}
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="version"
+Content-Type: application/json
+
+{ "changeNote": "Complément du laboratoire" }
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="analyses-v2.pdf"
+Content-Type: application/pdf
+
+< ./files/analyses-v2.pdf
+--WebAppBoundary--
+
+### 32. Partage sécurisé avec un praticien (permission + durée + motif)
+POST {{base}}/documents/{{documentId}}/shares
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "granteeUserId": 2,
+  "permission": "VIEW_AND_DOWNLOAD",
+  "reason": "Avis spécialisé cardiologie",
+  "expiresAt": "2027-01-01T00:00:00Z"
+}
+
+### 33. Liste des partages puis révocation (la trace est conservée)
+GET {{base}}/documents/{{documentId}}/shares
+Authorization: Bearer {{patientToken}}
+
+### 34. Téléchargement (le droit de lecture est vérifié avant l'envoi des octets)
+GET {{base}}/documents/{{documentId}}/download
+Authorization: Bearer {{patientToken}}
+
+### 35. Documents partagés avec moi (côté praticien)
+GET {{base}}/documents/shared-with-me
+Authorization: Bearer {{practitionerToken}}
+
+### 36. Transmission au DMP national (consentement DMP requis)
+POST {{base}}/documents/{{documentId}}/dmp
+Authorization: Bearer {{patientToken}}
+
+###############################################################################
+### 2.1 SUIVI SANTÉ CONNECTÉE
+###############################################################################
+
+### 37. Connexion d'un objet (montre, tensiomètre, glucomètre, balance, oxymètre, ECG)
+POST {{base}}/health/devices
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "type": "BLOOD_PRESSURE_MONITOR",
+  "provider": "BLUETOOTH_SIG",
+  "externalDeviceId": "BP-0001",
+  "label": "Tensiomètre salon",
+  "model": "Omron M7"
+}
+
+### 38. Import de mesures par lot (les alertes sont évaluées à l'ingestion)
+POST {{base}}/health/metrics
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "deviceId": "BP-0001",
+  "metrics": [
+    {
+      "type": "SYSTOLIC_BLOOD_PRESSURE", "value": 186, "context": "AT_REST",
+      "recordedAt": "2026-09-27T07:15:00Z", "sourceLabel": "Tensiomètre"
+    },
+    {
+      "type": "DIASTOLIC_BLOOD_PRESSURE", "value": 96, "context": "AT_REST",
+      "recordedAt": "2026-09-27T07:15:00Z", "sourceLabel": "Tensiomètre"
+    },
+    {
+      "type": "BLOOD_OXYGEN_SATURATION", "value": 91, "context": "AT_REST",
+      "recordedAt": "2026-09-27T07:16:00Z", "sourceLabel": "Oxymètre"
+    }
+  ]
+}
+
+### 39. Synchronisation avec la plateforme source
+POST {{base}}/health/devices/BP-0001/sync
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{ "from": "2026-09-01", "to": "2026-09-27" }
+
+### 40. Mesures brutes (fenêtre bornée)
+GET {{base}}/health/metrics?type=SYSTOLIC_BLOOD_PRESSURE&from=2026-09-01T00:00:00Z&to=2026-09-30T00:00:00Z&limit=200
+Authorization: Bearer {{patientToken}}
+
+### 41. Série prête à tracer (bucket = HOUR, DAY ou WEEK)
+GET {{base}}/health/series?type=SYSTOLIC_BLOOD_PRESSURE&bucket=DAY
+Authorization: Bearer {{patientToken}}
+
+### 42. Alertes automatiques puis acquittement
+GET {{base}}/health/alerts?onlyActive=true
+Authorization: Bearer {{patientToken}}
+
+### 43. Mes objets connectés
+GET {{base}}/health/devices
+Authorization: Bearer {{patientToken}}
+
+###############################################################################
+### 2.1 PRÉFÉRENCES, CONFIDENTIALITÉ, RGPD
+###############################################################################
+
+### 44. Langues, accessibilité et préférences de communication
+PUT {{base}}/privacy/preferences
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "preferredLanguages": ["fr", "en"],
+  "primaryLanguage": "fr",
+  "accessibility": {
+    "needs": ["VISUALLY_IMPAIRED"],
+    "screenReaderOptimized": true,
+    "largePrint": true,
+    "signLanguage": null,
+    "subtitlesRequired": false
+  },
+  "communication": {
+    "preferredChannels": ["EMAIL", "SMS"],
+    "quietHoursEnabled": true,
+    "quietHoursStart": "21:00:00",
+    "quietHoursEnd": "07:30:00"
+  }
+}
+
+### 45. Consentement RGPD (preuve : version de politique, IP, horodatage)
+POST {{base}}/privacy/consents
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{ "purpose": "RESEARCH", "granted": true, "policyVersion": "2026-09" }
+
+### 46. Retrait de consentement (l'historique est conservé, le retrait est daté)
+DELETE {{base}}/privacy/consents/RESEARCH
+Authorization: Bearer {{patientToken}}
+
+### 47. Granularité « qui peut voir quoi »
+PUT {{base}}/privacy/visibility
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "category": "MEDICAL_RECORD",
+  "level": "MY_PRACTITIONERS",
+  "granteeUserIds": []
+}
+
+PUT {{base}}/privacy/visibility
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "category": "MEDICAL_DOCUMENTS",
+  "level": "SPECIFIC_PRACTITIONERS",
+  "granteeUserIds": [2]
+}
+
+### 48. Partage DMP piloté par consentement
+PUT {{base}}/privacy/dmp-sharing
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{ "enabled": true, "policyVersion": "2026-09" }
+
+### 49. Mes préférences (consentements actifs + règles de visibilité)
+GET {{base}}/privacy/preferences
+Authorization: Bearer {{patientToken}}
+
+### 50. Export RGPD (art. 20) : fichier téléchargeable
+POST {{base}}/privacy/export
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{ "format": "json" }
+
+### 51. Effacement du compte (art. 17) — irréversible
+DELETE {{base}}/privacy/account
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{ "reason": "Demande du patient" }
+
+###############################################################################
+### 2.2 PROFIL MÉDECIN / PRATICIEN
+###############################################################################
+
+### 52. Identité professionnelle (photo et vidéo conservées si déjà téléversées)
+PUT {{base}}/practitioner-dossier/identity
+Authorization: Bearer {{practitionerToken}}
+Content-Type: application/json
+
+{
+  "title": "DOCTOR",
+  "firstName": "Jean",
+  "lastName": "Dupont",
+  "rppsNumber": "10001234567",
+  "adeliNumber": null,
+  "registrationOrder": "PHYSICIANS",
+  "mainSpecialty": "Cardiologie",
+  "secondarySpecialties": ["Médecine vasculaire"],
+  "subSpecialties": ["Rythmologie"],
+  "skills": ["Échographie cardiaque", "Holter"],
+  "diplomas": [
+    { "label": "Doctorat en médecine", "institution": "Université de Lille", "year": 2008, "specialty": "Cardiologie" }
+  ],
+  "experienceYears": 18,
+  "languages": ["fr", "en"],
+  "shortBio": "Cardiologue interventionnel, CHU Lille."
+}
+
+### 53. Informations médicales : secteur, tarifs, OPTAM, tiers-payant, téléconsultation
+PUT {{base}}/practitioner-dossier/practice-information
+Authorization: Bearer {{practitionerToken}}
+Content-Type: application/json
+
+{
+  "sector": "SECTOR_1",
+  "tariffs": [
+    { "actType": "Consultation", "amount": 26.50, "currency": "EUR", "coveredByInsurance": true, "note": null },
+    { "actType": "Échographie cardiaque", "amount": 69.00, "currency": "EUR", "coveredByInsurance": true, "note": "Avec dépassement maîtrisé" }
+  ],
+  "optam": true,
+  "optamCo": false,
+  "optamSignedOn": "2024-01-01",
+  "paymentMethods": ["CREDIT_CARD", "CHECK", "THIRD_PARTY_PAYMENT"],
+  "thirdPartyPayment": true,
+  "thirdPartyPaymentConditions": "CMU-C, AME, ALD uniquement",
+  "actsPerformed": ["APC", "CSC"],
+  "availableEquipment": ["Échographe", "ECG 12 dérivations", "Holter"],
+  "treatedPathologies": ["Hypertension", "Insuffisance cardiaque", "Arythmies"],
+  "acceptedAgeMin": 12,
+  "acceptedAgeMax": 100,
+  "teleconsultation": true,
+  "teleconsultationPlatform": "PRDV Visio"
+}
+
+### 54. Gestion professionnelle : SIRET, RIB (tokenisé), RC pro, URSSAF, AGA/CGA, ordre
+PUT {{base}}/practitioner-dossier/management
+Authorization: Bearer {{practitionerToken}}
+Content-Type: application/json
+
+{
+  "siret": "12345678900010",
+  "iban": "FR7630001007941234567890185",
+  "professionalInsurer": "MACSF",
+  "insurancePolicyNumber": "RCP-2026-0099",
+  "insuranceExpiresOn": "2026-12-31",
+  "urssafNumber": "11790000000099",
+  "accountingAssociation": "CGA",
+  "accountingAssociationNumber": "CGA-59-1234",
+  "ordinalCotisationYear": 2026,
+  "ordinalCotisationAmount": 350.00,
+  "qualityCertifications": ["ISO 9001 cabinet"],
+  "accreditations": [
+    { "organism": "HAS", "reference": "ACC-2025-001", "validUntil": "2028-06-30" }
+  ]
+}
+
+### 55. Visibilité & marketing
+PUT {{base}}/practitioner-dossier/visibility
+Authorization: Bearer {{practitionerToken}}
+Content-Type: application/json
+
+{
+  "longDescription": "Cabinet de cardiologie orienté prévention et suivi des pathologies chroniques.",
+  "expertiseDomains": ["Hypertension", "Prévention cardiovasculaire"],
+  "publications": ["Revue de cardiologie, 2023 — Suivi des hypertendus"],
+  "distinctions": ["Prix de la recherche clinique 2021"],
+  "conferenceTalks": ["Journées de cardiologie, Lyon 2025"],
+  "mediaReferences": ["Interview — Le Quotidien du Médecin"]
+}
+
+### 56. Réseau professionnel (correspondants, laboratoires, pharmacies, hôpitaux)
+POST {{base}}/practitioner-dossier/network-contacts
+Authorization: Bearer {{practitionerToken}}
+Content-Type: application/json
+
+{
+  "role": "LABORATORY",
+  "name": "Laboratoire BioLille",
+  "specialty": "Analyses biologiques",
+  "registrationNumber": null,
+  "city": "Lille"
+}
+
+### 57. Photo professionnelle puis vidéo de présentation (multipart)
+POST {{base}}/practitioner-dossier/photo
+Authorization: Bearer {{practitionerToken}}
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="dr-dupont.jpg"
+Content-Type: image/jpeg
+
+< ./files/dr-dupont.jpg
+--WebAppBoundary--
+
+### 58. Recalcul des badges (vérifié / populaire / nouveau — dérivés par le domaine)
+POST {{base}}/practitioner-dossier/badges/refresh
+Authorization: Bearer {{practitionerToken}}
+
+### 59. Mon dossier complet
+GET {{base}}/practitioner-dossier/me
+Authorization: Bearer {{practitionerToken}}
+
+###############################################################################
+### 2.2 CABINETS / LIEUX D'EXERCICE
+###############################################################################
+
+### 60. Création d'un lieu d'exercice (horaires, accessibilité, réseaux sociaux)
+# @name createLocation
+POST {{base}}/locations?mainLocation=true
+Authorization: Bearer {{practitionerToken}}
+Content-Type: application/json
+
+{
+  "name": "Cabinet centre-ville",
+  "line1": "15 rue Nationale",
+  "postalCode": "59800",
+  "city": "Lille",
+  "country": "France",
+  "latitude": 50.6333,
+  "longitude": 3.0586,
+  "openingHours": [
+    { "day": "MONDAY", "opensAt": "09:00:00", "closesAt": "18:30:00", "closed": false, "note": null },
+    { "day": "TUESDAY", "opensAt": "09:00:00", "closesAt": "18:30:00", "closed": false, "note": null },
+    { "day": "SUNDAY", "closed": true, "note": "Fermé" }
+  ],
+  "phone": "+33320998877",
+  "mobilePhone": "+33611223344",
+  "fax": "+33320998878",
+  "email": "cabinet.dupont@example.com",
+  "website": "https://cabinet-dupont.example.com",
+  "virtualTourUrl": "https://cabinet-dupont.example.com/visite-360",
+  "socialLinks": { "linkedin": "https://linkedin.com/in/jean-dupont-cardio" },
+  "wheelchairAccessible": true,
+  "parkingAvailable": true,
+  "publicTransportInfo": "Métro République – Beaux-Arts (ligne 1)"
+}
+
+@locationId = {{createLocation.response.body.id}}
+
+### 61. Mes lieux d'exercice
+GET {{base}}/locations
+Authorization: Bearer {{practitionerToken}}
+
+### 62. Photo du cabinet (salle d'attente, équipement, extérieur…)
+POST {{base}}/locations/{{locationId}}/photos
+Authorization: Bearer {{practitionerToken}}
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="photo"
+Content-Type: application/json
+
+{ "type": "WAITING_ROOM", "caption": "Salle d'attente rénovée" }
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="salle-attente.jpg"
+Content-Type: image/jpeg
+
+< ./files/salle-attente.jpg
+--WebAppBoundary--
+
+###############################################################################
+### 2.2 ANNUAIRE PUBLIC (lecture sans authentification)
+###############################################################################
+
+### 63. Recherche publique : terme, spécialité, ville, téléconsultation, accessibilité PMR
+GET {{base}}/directory/practitioners?term=cardio&specialty=Cardiologie&city=Lille&teleconsultationOnly=false&wheelchairAccessibleOnly=true&page=0&size=20
+
+### 64. Fiche publique d'un praticien
+GET {{base}}/directory/practitioners/2
+
+### 65. Avis visibles (l'identité du patient n'est exposée qu'au praticien concerné)
+GET {{base}}/directory/practitioners/2/ratings
+
+### 66. Déposer un avis (authentifié ; un seul avis par patient)
+POST {{base}}/directory/practitioners/2/ratings
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{ "score": 5, "comment": "Écoute et pédagogie remarquables." }

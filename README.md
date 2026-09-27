@@ -25,6 +25,58 @@ classiques (Adapter, Strategy, Observer, Factory, Specification, Value Object…
 > Le détail de l'architecture, des patterns et la table de couverture des
 > exigences figurent dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Module 2 — Profils & gestion des données
+
+Contexte borné `profile`, indépendant du contexte `iam` (il ne le connaît que
+par des **ports sortants**).
+
+**Profil patient complet**
+
+- Informations personnelles : état civil, **contacts multiples** (fixe, mobile,
+  pro, fax, email), **adresses multiples** (domicile, travail), personne à
+  prévenir, **médecin traitant déclaré**, n° de sécurité sociale (tokenisé +
+  masqué, jamais stocké en clair), **mutuelle principale + complémentaire**,
+  photo de profil, **pièce d'identité** (stockage chiffré), **carte Vitale**
+  (NFC / scan / saisie), partage avec le **DMP national**
+- **Dossier médical personnel** : antécédents structurés et familiaux,
+  allergies/intolérances, **vaccinations avec rappels**, maladies chroniques,
+  traitements en cours, chirurgies, hospitalisations, handicaps/limitations,
+  **groupe sanguin**, constantes vitales et **IMC calculé par le domaine**
+- **Documents médicaux** : upload multi-format (PDF, JPG, PNG, **DICOM**),
+  **classification automatique**, **OCR/extraction**, **versioning** immutable,
+  **partage sécurisé** (permissions, durée, révocation tracée), transmission au DMP
+- **Suivi santé connectée** : Apple Health / Google Fit / Bluetooth, montres,
+  tensiomètre, glucomètre, balance, oxymètre, ECG portable, **séries agrégées**
+  prêtes à tracer (heure/jour/semaine) et **alertes automatiques** à seuils
+- **Préférences & confidentialité** : langues, accessibilité (malvoyant, sourd),
+  préférences de communication, **consentements RGPD avec preuve**, granularité
+  « **qui peut voir quoi** », **export de données** (art. 20), **suppression de
+  compte** (art. 17)
+
+**Profil médecin / praticien**
+
+- Identité professionnelle : titre, **RPPS/ADELI**, ordre d'inscription,
+  spécialités principale/secondaires, sous-spécialités, compétences, diplômes,
+  années d'expérience, langues, photo pro, vidéo de présentation
+- Cabinets : **multi-lieux d'exercice**, géolocalisation, photos, visite
+  virtuelle 360°, horaires, téléphones/fax, email pro, site web, réseaux sociaux,
+  accessibilité PMR, parking, transports en commun
+- Informations médicales : **secteur de convention (1/2/3)**, tarifs par acte,
+  **OPTAM / OPTAM-CO**, modes de paiement, tiers-payant, actes pratiqués,
+  équipements, pathologies traitées, âges acceptés, téléconsultation
+- Gestion professionnelle : **SIRET** (validé), **RIB pro** (tokenisé + masqué),
+  assurance RC Pro, URSSAF, AGA/CGA, cotisation ordinale, certifications,
+  accréditations
+- Réseau professionnel : correspondants, spécialistes, laboratoires, pharmacies,
+  centres d'imagerie, hôpitaux de rattachement
+- Visibilité & marketing : description longue, domaines d'expertise,
+  publications, distinctions, conférences, médias, **avis et notes patients**,
+  **badges « vérifié », « populaire », « nouveau » dérivés par le domaine**
+
+> Architecture détaillée et table de couverture des exigences du module 2 :
+> [docs/ARCHITECTURE-M2.md](docs/ARCHITECTURE-M2.md). Exemples d'appels :
+> [docs/api-m2.http](docs/api-m2.http).
+
 ## Prérequis
 
 - JDK **17+**
@@ -230,6 +282,55 @@ Les codes OTP en développement s'affichent dans les logs :
 [NOTIFICATION EMAIL] Code OTP pour patient@… : 384921
 ```
 
+### Module 2 — profils & données
+
+```
+GET  /api/v1/profile/me                      Profil patient complet
+PUT  /api/v1/profile/civil-status            État civil
+PUT  /api/v1/profile/contacts                Coordonnées multiples
+PUT  /api/v1/profile/addresses               Adresses multiples
+POST /api/v1/profile/social-security-number  NIR (tokenisé + masqué)
+POST /api/v1/profile/vitale-card             Carte Vitale (NFC/scan)
+POST /api/v1/profile/dmp/link                Rattachement au DMP national
+
+GET  /api/v1/medical-record/{patientId}      Dossier médical personnel
+POST /api/v1/medical-record/{patientId}/allergies    Allergies / intolérances
+POST /api/v1/medical-record/{patientId}/vaccinations Vaccinations + rappels
+POST /api/v1/medical-record/{patientId}/vital-signs  Constantes vitales (IMC calculé)
+GET  /api/v1/medical-record/{patientId}/vaccination-reminders  Rappels échus/à venir
+
+POST /api/v1/documents                       Upload (multipart) → IA + OCR
+GET  /api/v1/documents/{id}/download         Téléchargement (droit vérifié)
+POST /api/v1/documents/{id}/versions         Nouvelle version (immutable)
+POST /api/v1/documents/{id}/shares           Partage sécurisé avec un praticien
+POST /api/v1/documents/{id}/dmp              Transmission au DMP
+
+POST /api/v1/health/devices                  Connexion d'un objet connecté
+POST /api/v1/health/metrics                  Import de mesures (+ alertes)
+GET  /api/v1/health/series?type=…&bucket=DAY Série prête à tracer
+GET  /api/v1/health/alerts                   Alertes automatiques
+
+GET  /api/v1/privacy/preferences             Langues, accessibilité, communication
+POST /api/v1/privacy/consents                Consentement RGPD (avec preuve)
+PUT  /api/v1/privacy/visibility              Granularité « qui peut voir quoi »
+POST /api/v1/privacy/export                  Export RGPD (art. 20)
+DELETE /api/v1/privacy/account               Effacement du compte (art. 17)
+
+PUT  /api/v1/practitioner-dossier/identity   Identité professionnelle
+PUT  /api/v1/practitioner-dossier/practice-information  Secteur, tarifs, OPTAM
+PUT  /api/v1/practitioner-dossier/management SIRET, RIB, RC pro, ordre
+POST /api/v1/practitioner-dossier/badges/refresh        Recalcul des badges
+
+GET  /api/v1/locations                       Mes lieux d'exercice
+POST /api/v1/locations                       Nouveau cabinet
+
+GET  /api/v1/directory/practitioners         Annuaire public (sans compte)
+GET  /api/v1/directory/practitioners/{id}    Fiche publique
+POST /api/v1/directory/practitioners/{id}/ratings       Avis patient (authentifié)
+```
+
+Exemples complets : [docs/api-m2.http](docs/api-m2.http).
+
 ## Tests
 
 ```bash
@@ -242,11 +343,34 @@ Les tests utilisent H2 en mémoire (voir `src/test/resources/application.yml`).
 
 ```
 src/main/java/com/prdv/rdv/
-├── common/                      Erreurs et Web communes
-└── iam/
-    ├── domain/                 Cœur métier pur (JPA/ Spring)
-    ├── application/            Cas d'usage (ports entrants), ports sortants
-    └── adapter/
-        ├── in/web, in/security REST, JWT, OAuth2, rate limit
-        └── out/…               JPA/MySQL/H2, JWT, OTP, KYC, fraude, stockage…
+├── common/                      Erreurs et Web communes (DomainException, ApiError)
+├── iam/                         Module 1 — utilisateurs & authentification
+│   ├── domain/                  Cœur métier pur (sans JPA ni Spring MVC)
+│   ├── application/             Cas d'usage (ports entrants), ports sortants
+│   └── adapter/
+│       ├── in/web, in/security  REST, JWT, OAuth2, rate limit
+│       └── out/…                JPA/MySQL/H2, JWT, OTP, KYC, fraude, stockage…
+└── profile/                     Module 2 — profils & gestion des données
+    ├── domain/
+    │   ├── model/{identity,medical,document,health,preference,practitioner}
+    │   ├── event/               Événements de domaine (ProfileEvent)
+    │   └── exception/           ProfileException + ProfileErrorCode
+    ├── application/
+    │   ├── command/             Commandes immuables (6 holders)
+    │   ├── result/              Vues publiées (ProfileViews)
+    │   ├── port/input/          13 cas d'usage
+    │   ├── port/output/         26 ports sortants
+    │   └── service/             13 services + support (garde d'accès, audit, mapper)
+    ├── adapter/
+    │   ├── in/web/{rest,dto}    8 contrôleurs, DTO d'entrée
+    │   └── out/
+    │       ├── persistence/     Entités JPA, convertisseurs JSON, mappers, adapteurs
+    │       ├── iam/             Pont vers le module 1 (7 adaptateurs)
+    │       ├── storage/         Stockage local chiffrable
+    │       ├── ai/              Classification + OCR (moteurs remplaçables)
+    │       ├── external/        DMP, Apple Health, Google Fit, géocodage
+    │       ├── notification/    Alertes de santé
+    │       ├── export/          Export RGPD
+    │       └── event/           Publication/écoute Spring
+    └── config/                  ProfileProperties, beans de domaine
 ```

@@ -40,7 +40,23 @@ public class AuditLog {
         ACCOUNT_SUSPENDED,
         ACCOUNT_ACTIVATED,
         ACCOUNT_ANONYMIZED,
-        SOCIAL_LOGIN
+        SOCIAL_LOGIN,
+        // Module 2 : profils & gestion des donnees (piste d'audit consolidee)
+        PROFILE_UPDATED,
+        MEDICAL_RECORD_UPDATED,
+        MEDICAL_RECORD_ACCESSED,
+        MEDICAL_DOCUMENT_UPLOADED,
+        MEDICAL_DOCUMENT_DOWNLOADED,
+        MEDICAL_DOCUMENT_SHARED,
+        CONSENT_RECORDED,
+        VISIBILITY_UPDATED,
+        DATA_EXPORTED,
+        DATA_ERASURE_REQUESTED,
+        CONNECTED_DEVICE_MANAGED,
+        HEALTH_ALERT_TRIGGERED,
+        PRACTITIONER_PROFILE_UPDATED,
+        PRACTITIONER_RATED,
+        PRACTITIONER_BADGES_REFRESHED
     }
 
     public enum Outcome { SUCCESS, FAILURE }
