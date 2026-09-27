@@ -146,7 +146,7 @@ class MedicalDocumentVersioningTest {
                 .isEqualTo(ProfileErrorCode.VALIDATION_ERROR);
 
         assertThatThrownBy(() -> document.shareWith(PRACTITIONER, MedicalDocument.SharePermission.VIEW,
-                "Expire", CLOCK.instant().minusDays(1), CLOCK))
+                "Expire", CLOCK.instant().minus(Duration.ofDays(1)), CLOCK))
                 .isInstanceOf(ProfileException.class)
                 .extracting(exception -> ((ProfileException) exception).getErrorCode())
                 .isEqualTo(ProfileErrorCode.VALIDATION_ERROR);
