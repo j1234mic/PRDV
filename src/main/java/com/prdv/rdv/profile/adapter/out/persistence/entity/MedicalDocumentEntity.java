@@ -50,7 +50,7 @@ public class MedicalDocumentEntity extends ProfileEntity {
     private MedicalDocument.DocumentStatus status;
 
     // --- Classification ---------------------------------------------------
-    @Column(precision = 4, scale = 3)
+    // Un Double est stocke en SQL DOUBLE : precision/scale ne s'appliquent qu'aux DECIMAL.
     private Double classificationConfidence;
 
     @Enumerated(EnumType.STRING)
@@ -76,7 +76,6 @@ public class MedicalDocumentEntity extends ProfileEntity {
     @Column(name = "ocr_extracted_fields")
     private Map<String, String> ocrExtractedFields = new LinkedHashMap<>();
 
-    @Column(precision = 4, scale = 3)
     private Double ocrConfidence;
 
     @Column(length = 40)
