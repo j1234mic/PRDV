@@ -371,8 +371,9 @@ public class PatientIdentity {
                             "Contact deja present : " + candidate.type() + " " + candidate.value());
                 }
             }
+            ContactType candidateType = candidate.type();
             boolean alreadyPreferred = normalized.stream()
-                    .anyMatch(existing -> existing.type() == candidate.type() && existing.preferred());
+                    .anyMatch(existing -> existing.type() == candidateType && existing.preferred());
             if (candidate.preferred() && alreadyPreferred) {
                 candidate = candidate.withPreferred(false);
             }

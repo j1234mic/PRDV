@@ -38,7 +38,7 @@ public interface ProfileEvent extends DomainEvent {
     }
 
     /** Donnees de sante connectee synchronisees depuis un objet connecte. */
-    record ConnectedDeviceSynchronized(Long userId, Long deviceId, String deviceType,
+    record ConnectedDeviceSynchronized(Long userId, String deviceId, String deviceType,
                                        int metricsImported, Instant occurredAt) implements ProfileEvent {
     }
 
