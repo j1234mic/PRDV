@@ -93,7 +93,7 @@ public class PrivacyPreferencesService implements PrivacyPreferencesUseCase {
                     command.communication().quietHoursStart(),
                     command.communication().quietHoursEnd()), clock);
         }
-        return saveAndAudit(preferences, "preferences mises a jour");
+        return viewMapper.preferencesView(saveAndAudit(preferences, "preferences mises a jour"));
     }
 
     @Override

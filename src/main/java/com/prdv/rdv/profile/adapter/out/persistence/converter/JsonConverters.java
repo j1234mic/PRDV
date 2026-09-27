@@ -49,7 +49,7 @@ public final class JsonConverters {
 
         private final JavaType javaType;
 
-        protected JsonAttributeConverter(TypeReference<T> typeReference) {
+        protected JsonAttributeConverter(TypeReference<? extends T> typeReference) {
             this.javaType = MAPPER.getTypeFactory().constructType(typeReference);
         }
 
