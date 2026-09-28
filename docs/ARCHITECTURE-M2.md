@@ -204,8 +204,9 @@ sortirait de cette racine (garde anti-traversée de chemin).
 
 ## 9. Stratégie de tests (module 2.1 — Documents médicaux)
 
-La pyramide de tests de l'API `/api/v1/documents` est exécutée par la CI
-(`.github/workflows/ci.yml`, `mvn verify`) :
+La pyramide de tests de l'API `/api/v1/documents` est exécutée par `mvn verify`
+(workflow CI prêt à l'emploi dans [`docs/workflows/ci.yml`](workflows/ci.yml) —
+le copier dans `.github/workflows/ci.yml` pour l'activer) :
 
 | Niveau | Classe | Périmètre |
 |---|---|---|

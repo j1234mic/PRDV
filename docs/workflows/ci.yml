@@ -1,3 +1,4 @@
+# A ACTIVER : copier ce fichier vers .github/workflows/ci.yml
 name: CI
 
 on:
