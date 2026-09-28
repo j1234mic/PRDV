@@ -23,7 +23,9 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Amorcage (seed) idempotent :
@@ -70,17 +72,91 @@ public class DataSeeder implements ApplicationRunner {
     }
 
     private void seedRoles() {
-        rolePermissions().forEach((roleName, codes) -> {
-            if (roleRepository.findByName(roleName).isEmpty()) {
-                Set<Permission> permissions = new LinkedHashSet<>(permissionRepository.findByCodes(codes));
-                Role role = Role.system(roleName, "Role systeme " + roleName, permissions);
-                roleRepository.save(role);
-                log.info("Role systeme cree : {}", roleName);
-            }
-        });
+        rolePermissions().forEach(this::syncSystemRole);
     }
 
-    private Map<String, Set<String>> rolePermissions() {
+    /**
+     * Cree un role systeme absent, ou RECONCILIE ses permissions avec la
+     * definition du code.
+     *
+     * <p>Un simple « creer si absent » suffit au premier demarrage, mais il fige
+     * ensuite les roles : toute permission ajoutee a un role par la suite
+     * ({@code profile.health.read} / {@code profile.health.write} du module 2.1,
+     * par exemple) n'atteint jamais une base deja amorcee — le role existe, le
+     * seed le saute — et les endpoints concernes repondent alors
+     * {@code 403 FORBIDDEN « permission manquante »} alors que le catalogue de
+     * permissions, le controleur et le jeton sont parfaitement corrects.
+     *
+     * <p>Comme les autorites sont resolues a chaque requete (filtre JWT), la
+     * reconciliation prend effet des le redemarrage : inutile de supprimer
+     * {@code ./data/prdv.mv.db} (ou la base MySQL) pour recuperer une permission.
+     * Les roles non systemes (crees par un administrateur) ne sont jamais
+     * touches : seul le code fait reference pour les roles systeme.
+     */
+    private void syncSystemRole(String roleName, Set<String> expectedCodes) {
+        Optional<Role> existing = roleRepository.findByName(roleName);
+        if (existing.isEmpty()) {
+            roleRepository.save(Role.system(roleName, "Role systeme " + roleName,
+                    permissionsFor(expectedCodes, roleName)));
+            log.info("Role systeme cree : {}", roleName);
+            return;
+        }
+
+        Role role = existing.get();
+        if (!isSystemRole(role, roleName)) {
+            log.warn("Role {} present mais non systeme : amorcage ignore (role personnalise)", roleName);
+            return;
+        }
+
+        Set<String> currentCodes = role.getPermissions().stream()
+                .map(Permission::getCode)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (currentCodes.equals(expectedCodes)) {
+            return; // deja aligne : aucune ecriture
+        }
+
+        role.setPermissions(permissionsFor(expectedCodes, roleName));
+        roleRepository.save(role);
+        log.warn("Role systeme {} reconcilie avec le code : ajoute {} / retire {}",
+                roleName, difference(expectedCodes, currentCodes), difference(currentCodes, expectedCodes));
+    }
+
+    /**
+     * Resout les codes en permissions persistees. Le catalogue est seme avant
+     * les roles, donc un code introuvable signale une faute de frappe dans
+     * {@link #PERMISSION_CATALOG} ou dans la definition du role.
+     */
+    private Set<Permission> permissionsFor(Set<String> codes, String roleName) {
+        Set<Permission> permissions = new LinkedHashSet<>(permissionRepository.findByCodes(codes));
+        Set<String> resolved = permissions.stream()
+                .map(Permission::getCode)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Set<String> unresolved = difference(codes, resolved);
+        if (!unresolved.isEmpty()) {
+            log.error("Permissions absentes du catalogue pour le role {} : {}", roleName, unresolved);
+        }
+        return permissions;
+    }
+
+    private static Set<String> difference(Set<String> left, Set<String> right) {
+        Set<String> copy = new LinkedHashSet<>(left);
+        copy.removeAll(right);
+        return copy;
+    }
+
+    /**
+     * Vrai si le role est bien un role systeme (les noms de {@link #rolePermissions()}
+     * sont reserves par le code). Le drapeau {@code system} fait reference, mais une
+     * base amorcee par une version anterieure du seed peut l'avoir a false : la
+     * description ecrite par le seed (« Role systeme X ») sert alors de seconde
+     * signature, sinon la reconciliation serait silencieusement ignoree.
+     */
+    private static boolean isSystemRole(Role role, String roleName) {
+        return role.isSystem() || ("Role systeme " + roleName).equals(role.getDescription());
+    }
+
+    /** Definition de reference des roles systeme (exposee aux tests de coherence RBAC). */
+    static Map<String, Set<String>> rolePermissions() {
         Map<String, Set<String>> rolePermissions = new LinkedHashMap<>();
         rolePermissions.put(Role.SUPER_ADMIN, allPermissionCodes());
         rolePermissions.put(Role.PATIENT, new LinkedHashSet<>(Arrays.asList(
@@ -215,7 +291,8 @@ public class DataSeeder implements ApplicationRunner {
             {"billing.write", "billing", "Gerer la facturation groupee"}
     };
 
-    private static Set<String> allPermissionCodes() {
+    /** Codes du catalogue de permissions (expose aux tests de coherence RBAC). */
+    static Set<String> allPermissionCodes() {
         Set<String> codes = new LinkedHashSet<>();
         for (String[] entry : PERMISSION_CATALOG) {
             codes.add(entry[0]);

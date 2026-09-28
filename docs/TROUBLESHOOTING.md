@@ -285,3 +285,103 @@ mvn -version
 - Vérifiez Java 17+ : `java -version`
 - Supprimez `./data/` si H2 fichier corrompu
 - Ouvrez une issue avec le log complet et `docker compose ps`.
+
+## `403 FORBIDDEN` — « Acces refuse : permission manquante » sur `/api/v1/health/**`
+
+**Réponse typique :**
+
+```json
+{
+  "timestamp": "2026-09-28T17:26:13.983Z",
+  "status": 403,
+  "code": "FORBIDDEN",
+  "message": "Acces refuse : permission manquante",
+  "path": "/api/v1/health/devices"
+}
+```
+
+### Cause
+
+Le jeton est valide (sinon la réponse serait `401`) : ce sont les **autorités
+effectives** qui ne contiennent pas la permission exigée par le `@PreAuthorize`
+du contrôleur (`profile.health.read` pour `GET /metrics`, `GET /series`,
+`GET /alerts`, `GET /devices` ; `profile.health.write` pour les écritures).
+
+Les autorités sont recalculées à **chaque requête** par
+`AuthorizationQueryService` : permissions des rôles + permissions directes +
+délégations actives. Une cause couvre la grande majorité des cas :
+
+> **le rôle en base a été amorcé avant que la permission soit ajoutée au code.**
+
+`DataSeeder` créait les rôles système « si absents » seulement : une permission
+ajoutée par la suite (`profile.health.read` / `profile.health.write` du module
+2.1) était inscrite au catalogue mais jamais propagée aux rôles déjà présents
+dans `./data/prdv.mv.db` (ou dans MySQL). Le catalogue, le contrôleur et le
+jeton sont donc tous corrects — seul le lien `roles_permissions` est incomplet.
+
+Autre cause possible, cette fois voulue : le compte n'est pas un patient ni un
+praticien (secrétaire, établissement, modération, support…) — ces rôles n'ont
+aucune permission `profile.health.*`.
+
+### Solutions
+
+#### Solution 1 — Redémarrer l'application (recommandé)
+
+Depuis la correction, `DataSeeder` **réconcilie** les rôles système avec la
+définition du code à chaque démarrage (création si absent, sinon mise à jour du
+jeu de permissions). Les autorités étant résolues à chaque requête, la
+correction prend effet immédiatement :
+
+```bash
+# arrêter puis relancer
+mvn spring-boot:run
+```
+
+Un ligne de log confirme la réconciliation :
+
+```
+WARN  c.p.r.iam.config.DataSeeder : Role systeme ROLE_PATIENT reconcilie avec le code :
+     ajoute [profile.health.read, profile.health.write] / retire []
+```
+
+#### Solution 2 — Vérifier les rôles et leurs permissions
+
+Avec un compte super-administrateur (`superadmin@prdv.app` / `Admin#2026!` par
+défaut) :
+
+```bash
+curl -s localhost:8080/api/v1/admin/roles -H "Authorization: Bearer $TOKEN"
+```
+
+Chaque rôle doit exposer ses `permissionCodes` ; `ROLE_PATIENT` doit contenir
+`profile.health.read` et `profile.health.write`, `ROLE_PRACTITIONER` au moins
+`profile.health.read`.
+
+#### Solution 3 — Rattacher un autre rôle au compte
+
+Si le compte de test n'est pas un patient/praticien, un administrateur peut lui
+attribuer le rôle voulu :
+
+```bash
+curl -X POST localhost:8080/api/v1/admin/users/1/roles \
+  -H "Authorization: Bearer $adminToken" -H "Content-Type: application/json" \
+  -d '{"roleNames":["ROLE_PATIENT"]}'
+```
+
+#### Solution 4 — Réamorcer la base (ancienne version du code)
+
+Sans la réconciliation (build anterieur), il faut rejouer l'amorçage complet :
+
+```bash
+rm -rf ./data          # H2 fichier : supprime aussi les comptes créés
+mvn spring-boot:run
+```
+
+### Tests de non-régression
+
+- `src/test/java/com/prdv/rdv/iam/config/DataSeederRoleSyncTest.java` — création,
+  réconciliation, rôle personnalisé jamais écrasé ;
+- `src/test/java/com/prdv/rdv/iam/config/ControllerPermissionCoverageTest.java` —
+  toute permission exigée par un `@PreAuthorize` existe au catalogue **et** est
+  accordée à au moins un rôle système (un endpoint qui exige une permission que
+  personne ne possède est détecté à la compilation des tests).

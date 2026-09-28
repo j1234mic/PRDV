@@ -226,7 +226,10 @@ H2 verrouillé).
 Swagger UI : <http://localhost:8080/swagger-ui.html>
 
 Au démarrage, le catalogue de permissions, les rôles systèmes et un compte
-**super-administrateur** sont créés :
+**super-administrateur** sont créés. L'amorçage est idempotent **et**
+auto-correctif : les rôles système déjà présents en base voient leurs permissions
+reconciliées avec la définition du code (une permission ajoutée à un rôle est donc
+prise en compte au redémarrage suivant, sans supprimer `./data/prdv.mv.db`) :
 
 | Email                         | Mot de passe par défaut |
 |-------------------------------|-------------------------|
