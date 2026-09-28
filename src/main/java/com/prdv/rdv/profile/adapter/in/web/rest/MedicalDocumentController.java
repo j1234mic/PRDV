@@ -1,7 +1,6 @@
 package com.prdv.rdv.profile.adapter.in.web.rest;
 
 import com.prdv.rdv.profile.adapter.in.web.dto.MedicalDocumentDtos;
-import com.prdv.rdv.profile.adapter.in.web.dto.PatientIdentityDtos;
 import com.prdv.rdv.profile.application.port.input.DocumentSharingUseCase;
 import com.prdv.rdv.profile.application.port.input.MedicalDocumentQueryUseCase;
 import com.prdv.rdv.profile.application.port.input.MedicalDocumentUseCase;

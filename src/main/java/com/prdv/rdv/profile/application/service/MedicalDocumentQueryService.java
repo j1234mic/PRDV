@@ -79,6 +79,18 @@ public class MedicalDocumentQueryService implements MedicalDocumentQueryUseCase 
     public ProfileViews.DocumentFile download(Long documentId) {
         Long userId = currentUser.requireCurrentUserId();
         MedicalDocument document = requireAccessibleDocument(documentId);
+
+        // Un partage VIEW ouvre la consultation des metadonnees, pas l'acces
+        // aux octets : seuls le proprietaire et les partages VIEW_AND_DOWNLOAD
+        // peuvent telecharger (granularite « qui peut voir quoi »).
+        if (!document.allowsDownload(userId, clock)) {
+            auditTrail.failure(ProfileAuditPort.ProfileAuditAction.MEDICAL_DOCUMENT_DOWNLOADED, userId,
+                    "MedicalDocument", String.valueOf(documentId),
+                    "telechargement refuse (partage sans droit de telechargement)");
+            throw ProfileException.of(ProfileErrorCode.ACCESS_DENIED,
+                    "Ce partage ne permet pas le telechargement du document");
+        }
+
         MedicalDocument.DocumentVersion version = document.currentVersion();
         byte[] content = fileStorage.retrieve(version.storageKey());
 
