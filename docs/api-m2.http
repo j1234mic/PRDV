@@ -2,8 +2,10 @@
 ### (compatible IntelliJ HTTP Client / VS Code REST Client)
 ###
 ### Prérequis : avoir créé un patient et un praticien (voir docs/api-m1.http).
-### Les permissions du module 2 sont amorcées par `DataSeeder` : si la base
-### existe déjà, supprimer `./data/prdv.mv.db` pour rejouer l'amorçage des rôles.
+### Les permissions du module 2 sont amorcées par `DataSeeder` : les rôles système
+### déjà présents en base sont réconciliés au démarrage, il n'est donc plus
+### nécessaire de supprimer ./data/prdv.mv.db après un ajout de permission.
+### (un simple redémarrage suffit ; voir docs/TROUBLESHOOTING.md, section 403)
 
 @host = http://localhost:8080
 @base = {{host}}/api/v1
