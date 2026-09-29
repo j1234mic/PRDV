@@ -201,3 +201,22 @@ sortirait de cette racine (garde anti-traversée de chemin).
   renvoie un ensemble vide tant que le module 3 (rendez-vous) n'est pas livré —
   la visibilité `MY_PRACTITIONERS` reste donc fermée par défaut (choix sûr).
 - **Géocodage** : `UnknownAddressGeocodingAdapter` ne devine pas de coordonnées.
+
+## 9. Stratégie de tests (module 2.1 — Documents médicaux)
+
+La pyramide de tests de l'API `/api/v1/documents` est exécutée par `mvn verify`
+(workflow CI prêt à l'emploi dans [`docs/workflows/ci.yml`](workflows/ci.yml) —
+le copier dans `.github/workflows/ci.yml` pour l'activer) :
+
+| Niveau | Classe | Périmètre |
+|---|---|---|
+| **Unitaire** | `MedicalDocumentServiceTest`, `MedicalDocumentQueryServiceTest`, `DocumentSharingServiceTest` | cas d'usage isolés (Mockito sur les ports), pipeline upload → OCR → classification, versioning, granularité `VIEW` / `VIEW_AND_DOWNLOAD`, consentement DMP |
+| **Unitaire** | `MedicalFilePolicyTest`, `KeywordDocumentClassificationAdapterTest`, `TextOcrExtractionAdapterTest`, `LocalMedicalFileStorageAdapterTest` | règles fichier, lexique de classification, extraction OCR (NIR, dates, RPPS, biologie), stockage (anti path-traversal) |
+| **Intégration** | `MedicalDocumentPersistenceAdapterTest` (`@DataJpaTest`) | aller-retour domaine ↔ base (versions JSON, partages dans `profile_document_shares`), requêtes d'accès, revocation tracée |
+| **Intégration web** | `MedicalDocumentControllerWebTest` (`@WebMvcTest`) | contrat REST, multipart JSON + fichier, validation, `Content-Disposition`, `@PreAuthorize` |
+| **Bout en bout** | `MedicalDocumentApiE2ETest` (`@SpringBootTest` RANDOM_PORT) | parcours réel HTTP + JWT signés + RBAC + H2 + vrais adaptateurs : dépôt auto-classé, requalification, versions, partage fin, révocation, DMP (consentement requis), archivage immuable ; matrice 401/403 et validation des entrées |
+
+Règles respectées : le domaine reste pur (horloge injectée, fixtures à date
+fixe), chaque test vérifie aussi la **piste d'audit** et les **événements**
+publiés, et les tests e2e créent leurs propres comptes (rôles issus du
+`DataSeeder`, jetons réels de `JwtTokenPort`).

@@ -32,7 +32,9 @@ public class TextOcrExtractionAdapter implements OcrExtractionPort {
     private static final Logger log = LoggerFactory.getLogger(TextOcrExtractionAdapter.class);
     private static final String ENGINE = "text-extractor-v1";
 
-    private static final Pattern SOCIAL_SECURITY = Pattern.compile("\\b[12]\\s?\\d{2}(?:\\s?\\d{2}){2}"
+    /** NIR francais : 15 chiffres (sexe, annee, mois, departement, ordre, cle),
+     *  espaces facultatifs, departements corse 2A/2B. */
+    private static final Pattern SOCIAL_SECURITY = Pattern.compile("\\b[12]\\s?\\d{2}(?:\\s?\\d{2})"
             + "(?:\\s?\\d{2}|\\s?2[AB])(?:\\s?\\d{3}){2}\\s?\\d{2}\\b");
     private static final Pattern DATE = Pattern.compile("\\b(\\d{2}[/.-]\\d{2}[/.-]\\d{4}"
             + "|\\d{4}-\\d{2}-\\d{2})\\b");
@@ -79,6 +81,12 @@ public class TextOcrExtractionAdapter implements OcrExtractionPort {
 
     private static java.util.Optional<String> firstMatch(Pattern pattern, String text) {
         Matcher matcher = pattern.matcher(text);
-        return matcher.find() ? java.util.Optional.of(matcher.group().trim()) : java.util.Optional.empty();
+        if (!matcher.find()) {
+            return java.util.Optional.empty();
+        }
+        // Un groupe de capture unique designe la valeur utile (ex : le numero
+        // RPPS sans son libelle) ; sans groupe, la correspondance entiere.
+        String value = matcher.groupCount() >= 1 ? matcher.group(1) : matcher.group();
+        return java.util.Optional.of(value.trim());
     }
 }

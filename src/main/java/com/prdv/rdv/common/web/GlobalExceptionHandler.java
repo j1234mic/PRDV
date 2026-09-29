@@ -55,7 +55,9 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({HttpMessageNotReadableException.class, MultipartException.class,
-            MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class,
+            org.springframework.web.bind.MissingServletRequestPartException.class,
+            MethodArgumentTypeMismatchException.class,
             IllegalArgumentException.class})
     public ResponseEntity<ApiError> handleBadRequest(Exception ex, HttpServletRequest request) {
         return ResponseEntity.badRequest()

@@ -101,11 +101,18 @@ public class MedicalDocumentService implements MedicalDocumentUseCase {
                     command.dicomStudyDescription(), clock);
         }
 
+        MedicalDocument.ClassificationResult pendingClassification = null;
         if (command.category() == null) {
-            classifyAutomatically(document, command, ocr);
+            pendingClassification = classifyAutomatically(document, command, ocr);
         }
 
         MedicalDocument saved = documentRepository.save(document);
+        if (pendingClassification != null) {
+            // Publie apres le save : l'evenement porte l'identifiant reel du document.
+            eventPublisher.publish(new ProfileEvent.MedicalDocumentClassified(saved.getId(),
+                    pendingClassification.category().name(), pendingClassification.confidence(),
+                    pendingClassification.classifier(), clock.instant()));
+        }
         auditTrail.success(ProfileAuditPort.ProfileAuditAction.MEDICAL_DOCUMENT_UPLOADED, userId,
                 "MedicalDocument", String.valueOf(saved.getId()),
                 (saved.getCategory() == null ? "non classe" : saved.getCategory().name())
@@ -168,8 +175,12 @@ public class MedicalDocumentService implements MedicalDocumentUseCase {
 
     // ------------------------------------------------------------------
 
-    private void classifyAutomatically(MedicalDocument document, DocumentCommands.UploadDocument command,
-                                       MedicalDocument.OcrResult ocr) {
+    /** Applique la classification automatique et renvoie la decision retenue
+     *  (null si le classifieur n'a rien propose) : l'evenement n'est publie
+     *  qu'apres la persistance, avec l'identifiant du document. */
+    private MedicalDocument.ClassificationResult classifyAutomatically(
+            MedicalDocument document, DocumentCommands.UploadDocument command,
+            MedicalDocument.OcrResult ocr) {
         DocumentClassificationPort.ClassificationRequest request =
                 new DocumentClassificationPort.ClassificationRequest(command.originalFilename(),
                         command.contentType(),
@@ -178,13 +189,13 @@ public class MedicalDocumentService implements MedicalDocumentUseCase {
                         command.content());
         DocumentClassificationPort.Classification result = classification.classify(request);
         if (result == null || result.category() == null) {
-            return;
+            return null;
         }
-        document.applyClassification(new MedicalDocument.ClassificationResult(result.category(),
-                result.confidence(), MedicalDocument.ClassificationSource.AUTOMATIC_AI,
-                classification.name(), clock.instant()), clock);
-        eventPublisher.publish(new ProfileEvent.MedicalDocumentClassified(document.getId(),
-                result.category().name(), result.confidence(), classification.name(), clock.instant()));
+        MedicalDocument.ClassificationResult applied = new MedicalDocument.ClassificationResult(
+                result.category(), result.confidence(), MedicalDocument.ClassificationSource.AUTOMATIC_AI,
+                classification.name(), clock.instant());
+        document.applyClassification(applied, clock);
+        return applied;
     }
 
     private MedicalDocument requireOwnedDocument(Long documentId, Long userId) {
