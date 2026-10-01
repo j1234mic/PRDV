@@ -1,5 +1,7 @@
 package com.prdv.rdv.profile.adapter.in.web.rest;
 
+import com.prdv.rdv.iam.adapter.in.security.JwtAuthenticationFilter;
+import com.prdv.rdv.iam.adapter.in.security.RateLimitFilter;
 import com.prdv.rdv.profile.application.command.DocumentCommands;
 import com.prdv.rdv.profile.application.port.input.DocumentSharingUseCase;
 import com.prdv.rdv.profile.application.port.input.MedicalDocumentQueryUseCase;
@@ -14,8 +16,10 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.EnableMethodSecurity;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.web.servlet.MockMvc;
@@ -49,7 +53,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * metiere (couche web testee seule). La securite methodique
  * ({@code @PreAuthorize}) est active via {@code @EnableMethodSecurity}.
  */
-@WebMvcTest(controllers = MedicalDocumentController.class)
+@WebMvcTest(
+        controllers = MedicalDocumentController.class,
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = {JwtAuthenticationFilter.class, RateLimitFilter.class}))
 class MedicalDocumentControllerWebTest {
 
     private static final String READ = "profile.document.read";
