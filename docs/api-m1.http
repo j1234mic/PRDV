@@ -107,6 +107,24 @@ Content-Type: application/json
   "departments": ["Cardiologie", "Imagerie"]
 }
 
+### 10bis. Lister les etablissements (pour connaitre leur user.id)
+GET {{base}}/establishments
+Authorization: Bearer {{accessToken}}
+
+### 10ter. Demander un rattachement a un cabinet (multi-etablissements)
+# establishmentUserId accepte le user.id du compte ESTABLISHMENT ou l'id de establishment_profiles
+# role : OWNER | EMPLOYEE | REPLACER (optionnel, EMPLOYEE par defaut)
+POST {{base}}/practitioners/me/memberships
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "establishmentUserId": 1,
+  "role": "EMPLOYEE",
+  "validFrom": "2026-10-03",
+  "validUntil": "2027-10-03"
+}
+
 ### 11. Connexion super-admin
 # @name adminLogin
 POST {{base}}/auth/login

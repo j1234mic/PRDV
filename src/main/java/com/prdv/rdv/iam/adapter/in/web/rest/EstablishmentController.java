@@ -35,6 +35,12 @@ public class EstablishmentController {
                 request.siret(), request.address(), request.departments(), null));
     }
 
+    @GetMapping
+    @PreAuthorize("hasAuthority('iam.establishment.read')")
+    public List<Views.EstablishmentView> list() {
+        return establishmentUseCase.listEstablishments();
+    }
+
     @GetMapping("/me")
     @PreAuthorize("hasAuthority('iam.establishment.read')")
     public Views.EstablishmentView me() {

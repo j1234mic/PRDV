@@ -34,8 +34,18 @@ public class EstablishmentProfilePersistenceAdapter implements EstablishmentProf
     }
 
     @Override
+    public Optional<EstablishmentProfile> findById(Long id) {
+        return jpa.findById(id).map(mapper::toDomain);
+    }
+
+    @Override
     public Optional<EstablishmentProfile> findByUserId(Long userId) {
         return jpa.findByUserId(userId).map(mapper::toDomain);
+    }
+
+    @Override
+    public List<EstablishmentProfile> findAll() {
+        return jpa.findAll().stream().map(mapper::toDomain).toList();
     }
 
     @Override
