@@ -76,6 +76,15 @@ public class EstablishmentRegistrationService implements EstablishmentRegistrati
 
     @Override
     @Transactional(readOnly = true)
+    public List<Views.EstablishmentView> listEstablishments() {
+        return profileRepository.findAll().stream()
+                .flatMap(profile -> userRepository.findById(profile.getUserId()).stream()
+                        .map(user -> viewMapper.establishmentView(user, profile)))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Views.EstablishmentView currentProfile() {
         Long userId = securityContext.requireCurrentUserId();
         User user = requireUser(userId);

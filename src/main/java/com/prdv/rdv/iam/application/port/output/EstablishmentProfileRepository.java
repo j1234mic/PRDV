@@ -9,7 +9,11 @@ public interface EstablishmentProfileRepository {
 
     EstablishmentProfile save(EstablishmentProfile profile);
 
+    Optional<EstablishmentProfile> findById(Long id);
+
     Optional<EstablishmentProfile> findByUserId(Long userId);
+
+    List<EstablishmentProfile> findAll();
 
     List<EstablishmentProfile> findPendingValidation();
 }

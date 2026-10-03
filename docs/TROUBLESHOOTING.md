@@ -385,3 +385,55 @@ mvn spring-boot:run
   toute permission exigée par un `@PreAuthorize` existe au catalogue **et** est
   accordée à au moins un rôle système (un endpoint qui exige une permission que
   personne ne possède est détecté à la compilation des tests).
+
+## `400 VALIDATION_ERROR` sur `POST /api/v1/practitioners/me/memberships`
+
+**Réponse typique :**
+
+```json
+{
+  "timestamp": "2026-10-03T10:00:00.000Z",
+  "status": 400,
+  "code": "VALIDATION_ERROR",
+  "message": "...",
+  "path": "/api/v1/practitioners/me/memberships"
+}
+```
+
+### Causes possibles
+
+1. **Confusion entre `users.id` et `establishment_profiles.id` (`Le compte cible n'est pas un etablissement`)** :
+   - Au démarrage, `DataSeeder` crée le compte `superadmin@prdv.app` avec `users.id = 1` (`ProfileType.ADMIN`).
+   - Les comptes suivants reçoivent `users.id = 2` (patient), `3` (praticien), `4` (établissement), tandis que la table `establishment_profiles` numérote son premier établissement à `id = 1`.
+   - En envoyant `"establishmentUserId": 1` sur l'ancienne version, le service chargeait `users.id = 1` (`ADMIN`) au lieu du premier établissement.
+   - **Corrigé** : `PractitionerRegistrationService` résout désormais `establishmentUserId` d'abord comme `users.id` de type `ESTABLISHMENT`, puis en repli comme `establishment_profiles.id`. Vous pouvez également lister les établissements existants via `GET /api/v1/establishments`.
+
+2. **Valeur de `role` ou nom de champ non reconnu (`Requete invalide` / `Parametres invalides`)** :
+   - Valeurs canoniques de `role` : `OWNER`, `EMPLOYEE`, `REPLACER`.
+   - **Corrigé** :
+     - `role` est désormais **optionnel** (défaut : `EMPLOYEE`) et accepte aussi le nom de champ `memberRole` ;
+     - la désérialisation est insensible à la casse et aux accents et accepte les alias usuels (`TITULAIRE`, `GERANT`, `SALARIE`, `COLLABORATEUR`, `ASSOCIE`, `MEMBRE`, `PRATICIEN`, `MEDECIN`, `REMPLACANT`, etc.) ;
+     - `establishmentUserId` accepte aussi l'alias `establishmentId` / `cabinetId` ;
+     - `validFrom` et `validUntil` acceptent `YYYY-MM-DD`, un horodatage ISO-8601 (`2026-10-03T08:00:00Z`), le format français `DD/MM/YYYY`, ou `null` / `""`.
+
+3. **Demande de rattachement déjà envoyée (`Un rattachement existe deja avec cet etablissement`)** :
+   - **Corrigé** : si une demande `PENDING` existe déjà pour le couple `(praticien, établissement)`, un second `POST /api/v1/practitioners/me/memberships` met à jour la demande en attente de manière idempotente au lieu de renvoyer `400 VALIDATION_ERROR`.
+
+4. **Dates incohérentes (`validUntil` antérieure à `validFrom`)** :
+   - Assurez-vous que `validUntil >= validFrom` (ou laissez `validFrom` / `validUntil` à `null` pour un rattachement sans date de fin).
+
+### Exemple de requête valide
+
+```http
+POST http://localhost:8080/api/v1/practitioners/me/memberships
+Authorization: Bearer <practitionerAccessToken>
+Content-Type: application/json
+
+{
+  "establishmentUserId": 1,
+  "role": "EMPLOYEE",
+  "validFrom": "2026-10-03",
+  "validUntil": "2027-10-03"
+}
+```
+

@@ -7,6 +7,7 @@ import com.prdv.rdv.iam.application.port.input.PractitionerRegistrationUseCase;
 import com.prdv.rdv.iam.application.port.output.BankAccountVerificationPort;
 import com.prdv.rdv.iam.application.port.output.ContractRepository;
 import com.prdv.rdv.iam.application.port.output.DomainEventPublisher;
+import com.prdv.rdv.iam.application.port.output.EstablishmentProfileRepository;
 import com.prdv.rdv.iam.application.port.output.MedicalRegistryPort;
 import com.prdv.rdv.iam.application.port.output.MembershipRepository;
 import com.prdv.rdv.iam.application.port.output.PractitionerProfileRepository;
@@ -27,11 +28,13 @@ import com.prdv.rdv.iam.domain.model.user.ProfileType;
 import com.prdv.rdv.iam.domain.model.user.User;
 import com.prdv.rdv.iam.domain.model.verification.EstablishmentMembership;
 import com.prdv.rdv.iam.domain.model.verification.PractitionerContract;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class PractitionerRegistrationService implements PractitionerRegistrationUseCase {
@@ -41,6 +44,7 @@ public class PractitionerRegistrationService implements PractitionerRegistration
     private final RegistrationSupport registrationSupport;
     private final UserRepository userRepository;
     private final PractitionerProfileRepository profileRepository;
+    private final EstablishmentProfileRepository establishmentProfileRepository;
     private final MedicalRegistryPort medicalRegistry;
     private final BankAccountVerificationPort bankVerification;
     private final TokenizationPort tokenization;
@@ -52,6 +56,37 @@ public class PractitionerRegistrationService implements PractitionerRegistration
     private final AuditLogger auditLogger;
     private final DomainEventPublisher eventPublisher;
     private final Clock clock;
+
+    @Autowired
+    public PractitionerRegistrationService(RegistrationSupport registrationSupport,
+                                           UserRepository userRepository,
+                                           PractitionerProfileRepository profileRepository,
+                                           EstablishmentProfileRepository establishmentProfileRepository,
+                                           MedicalRegistryPort medicalRegistry,
+                                           BankAccountVerificationPort bankVerification,
+                                           TokenizationPort tokenization,
+                                           KycDocumentsUseCase kycDocumentsUseCase,
+                                           ContractRepository contractRepository,
+                                           MembershipRepository membershipRepository,
+                                           SecurityContextPort securityContext,
+                                           ViewMapper viewMapper, AuditLogger auditLogger,
+                                           DomainEventPublisher eventPublisher, Clock clock) {
+        this.registrationSupport = registrationSupport;
+        this.userRepository = userRepository;
+        this.profileRepository = profileRepository;
+        this.establishmentProfileRepository = establishmentProfileRepository;
+        this.medicalRegistry = medicalRegistry;
+        this.bankVerification = bankVerification;
+        this.tokenization = tokenization;
+        this.kycDocumentsUseCase = kycDocumentsUseCase;
+        this.contractRepository = contractRepository;
+        this.membershipRepository = membershipRepository;
+        this.securityContext = securityContext;
+        this.viewMapper = viewMapper;
+        this.auditLogger = auditLogger;
+        this.eventPublisher = eventPublisher;
+        this.clock = clock;
+    }
 
     public PractitionerRegistrationService(RegistrationSupport registrationSupport,
                                            UserRepository userRepository,
@@ -65,20 +100,10 @@ public class PractitionerRegistrationService implements PractitionerRegistration
                                            SecurityContextPort securityContext,
                                            ViewMapper viewMapper, AuditLogger auditLogger,
                                            DomainEventPublisher eventPublisher, Clock clock) {
-        this.registrationSupport = registrationSupport;
-        this.userRepository = userRepository;
-        this.profileRepository = profileRepository;
-        this.medicalRegistry = medicalRegistry;
-        this.bankVerification = bankVerification;
-        this.tokenization = tokenization;
-        this.kycDocumentsUseCase = kycDocumentsUseCase;
-        this.contractRepository = contractRepository;
-        this.membershipRepository = membershipRepository;
-        this.securityContext = securityContext;
-        this.viewMapper = viewMapper;
-        this.auditLogger = auditLogger;
-        this.eventPublisher = eventPublisher;
-        this.clock = clock;
+        this(registrationSupport, userRepository, profileRepository, null,
+                medicalRegistry, bankVerification, tokenization, kycDocumentsUseCase,
+                contractRepository, membershipRepository, securityContext,
+                viewMapper, auditLogger, eventPublisher, clock);
     }
 
     @Override
@@ -160,15 +185,30 @@ public class PractitionerRegistrationService implements PractitionerRegistration
     public Views.MembershipView requestMembership(ProfileCommands.RequestMembership command) {
         Long practitionerId = securityContext.requireCurrentUserId();
         requireProfile(practitionerId);
+        EstablishmentMembership.validateValidityPeriod(command.validFrom(), command.validUntil());
         User establishment = requireEstablishment(command.establishmentUserId());
 
-        boolean alreadyLinked = membershipRepository.findByPractitionerUserId(practitionerId).stream()
-                .anyMatch(m -> m.getEstablishmentUserId().equals(establishment.getId())
+        Optional<EstablishmentMembership> existing = membershipRepository.findByPractitionerUserId(practitionerId).stream()
+                .filter(m -> m.getEstablishmentUserId().equals(establishment.getId())
                         && (m.getStatus() == EstablishmentMembership.MembershipStatus.PENDING
-                            || m.getStatus() == EstablishmentMembership.MembershipStatus.ACTIVE));
-        if (alreadyLinked) {
+                            || m.getStatus() == EstablishmentMembership.MembershipStatus.ACTIVE))
+                .findFirst();
+
+        if (existing.isPresent()) {
+            EstablishmentMembership current = existing.get();
+            if (current.getStatus() == EstablishmentMembership.MembershipStatus.PENDING) {
+                current.updatePending(command.role(), command.validFrom(), command.validUntil(), clock);
+                return viewMapper.membershipView(membershipRepository.save(current));
+            }
+            EstablishmentMembership.MemberRole requestedRole = command.role() != null
+                    ? command.role() : EstablishmentMembership.MemberRole.EMPLOYEE;
+            if (current.getMemberRole() == requestedRole) {
+                current.setValidFrom(command.validFrom());
+                current.setValidUntil(command.validUntil());
+                return viewMapper.membershipView(membershipRepository.save(current));
+            }
             throw IamException.of(IamErrorCode.VALIDATION_ERROR,
-                    "Un rattachement existe deja avec cet etablissement");
+                    "Un rattachement actif existe deja avec cet etablissement (role " + current.getMemberRole() + ")");
         }
 
         EstablishmentMembership membership = EstablishmentMembership.request(
@@ -182,9 +222,10 @@ public class PractitionerRegistrationService implements PractitionerRegistration
     public Views.MembershipView declareReplacement(ProfileCommands.DeclareReplacement command) {
         Long practitionerId = securityContext.requireCurrentUserId();
         requireProfile(practitionerId);
-        requireEstablishment(command.establishmentUserId());
+        EstablishmentMembership.validateValidityPeriod(command.validFrom(), command.validUntil());
+        User establishment = requireEstablishment(command.establishmentUserId());
         EstablishmentMembership membership = EstablishmentMembership.request(
-                command.establishmentUserId(), practitionerId,
+                establishment.getId(), practitionerId,
                 EstablishmentMembership.MemberRole.REPLACER,
                 command.validFrom(), command.validUntil(), clock);
         return viewMapper.membershipView(membershipRepository.save(membership));
@@ -208,13 +249,44 @@ public class PractitionerRegistrationService implements PractitionerRegistration
                 .orElseThrow(() -> IamException.of(IamErrorCode.NOT_FOUND, "Utilisateur introuvable"));
     }
 
-    private User requireEstablishment(Long establishmentUserId) {
-        User establishment = userRepository.findById(establishmentUserId)
-                .orElseThrow(() -> IamException.of(IamErrorCode.NOT_FOUND, "Etablissement introuvable"));
-        if (establishment.getProfileType() != ProfileType.ESTABLISHMENT) {
+    /**
+     * Resout le compte utilisateur de l'etablissement cible.
+     *
+     * <p>Accepte aussi bien le {@code users.id} d'un compte {@link ProfileType#ESTABLISHMENT}
+     * que le {@code establishment_profiles.id} (cle primaire de la table
+     * {@code establishment_profiles}, qui commence a 1 alors que {@code users.id = 1}
+     * est occupe par le super-administrateur amorce au demarrage).
+     */
+    private User requireEstablishment(Long establishmentIdOrUserId) {
+        if (establishmentIdOrUserId == null) {
             throw IamException.of(IamErrorCode.VALIDATION_ERROR,
-                    "Le compte cible n'est pas un etablissement");
+                    "L'identifiant de l'etablissement (establishmentUserId) est obligatoire");
         }
-        return establishment;
+
+        Optional<User> directUser = userRepository.findById(establishmentIdOrUserId);
+        if (directUser.isPresent() && directUser.get().getProfileType() == ProfileType.ESTABLISHMENT) {
+            return directUser.get();
+        }
+
+        if (establishmentProfileRepository != null) {
+            Optional<User> byProfileId = establishmentProfileRepository.findById(establishmentIdOrUserId)
+                    .flatMap(profile -> userRepository.findById(profile.getUserId()))
+                    .filter(u -> u.getProfileType() == ProfileType.ESTABLISHMENT);
+            if (byProfileId.isPresent()) {
+                return byProfileId.get();
+            }
+        }
+
+        if (directUser.isPresent()) {
+            throw IamException.of(IamErrorCode.VALIDATION_ERROR,
+                    "Le compte #" + establishmentIdOrUserId + " est de type "
+                            + directUser.get().getProfileType()
+                            + " et non ESTABLISHMENT (et aucun profil d'etablissement ne porte l'id #"
+                            + establishmentIdOrUserId
+                            + "). Passez le user.id ou l'id d'un etablissement (consultable via GET /api/v1/establishments)");
+        }
+        throw IamException.of(IamErrorCode.NOT_FOUND,
+                "Etablissement introuvable pour l'identifiant #" + establishmentIdOrUserId
+                        + " (inscrivez d'abord un etablissement via POST /api/v1/establishments/register ou consultez GET /api/v1/establishments)");
     }
 }

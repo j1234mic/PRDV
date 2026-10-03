@@ -14,6 +14,8 @@ public interface EstablishmentRegistrationUseCase {
 
     Views.OtpSentView register(RegistrationCommands.RegisterEstablishment command);
 
+    List<Views.EstablishmentView> listEstablishments();
+
     Views.EstablishmentView currentProfile();
 
     List<Views.MembershipView> memberships();
