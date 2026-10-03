@@ -22,6 +22,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -99,7 +100,7 @@ class MedicalDocumentControllerWebTest {
 
         mockMvc.perform(get("/api/v1/documents")
                         .param("category", "LAB_RESULT")
-                        .with(user("42").authorities(READ)))
+                        .with(user("42").authorities(new SimpleGrantedAuthority(READ))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].category").value("LAB_RESULT"));
 
@@ -111,7 +112,7 @@ class MedicalDocumentControllerWebTest {
     void rejectsUnknownCategory() throws Exception {
         mockMvc.perform(get("/api/v1/documents")
                         .param("category", "INCONNU")
-                        .with(user("42").authorities(READ)))
+                        .with(user("42").authorities(new SimpleGrantedAuthority(READ))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -124,7 +125,7 @@ class MedicalDocumentControllerWebTest {
         when(queryUseCase.document(99L)).thenReturn(documentView());
 
         mockMvc.perform(get("/api/v1/documents/99")
-                        .with(user("42").authorities(READ)))
+                        .with(user("42").authorities(new SimpleGrantedAuthority(READ))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(99))
                 .andExpect(jsonPath("$.currentVersion").value(1));
@@ -147,7 +148,7 @@ class MedicalDocumentControllerWebTest {
                         .getBytes(StandardCharsets.UTF_8));
 
         mockMvc.perform(multipart("/api/v1/documents").file(file).file(metadata)
-                        .with(user("42").authorities(WRITE)))
+                        .with(user("42").authorities(new SimpleGrantedAuthority(WRITE))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("Analyses"));
 
@@ -170,7 +171,7 @@ class MedicalDocumentControllerWebTest {
                 MediaType.APPLICATION_JSON_VALUE, "{\"title\":\"\"}".getBytes(StandardCharsets.UTF_8));
 
         mockMvc.perform(multipart("/api/v1/documents").file(file).file(metadata)
-                        .with(user("42").authorities(WRITE)))
+                        .with(user("42").authorities(new SimpleGrantedAuthority(WRITE))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
 
@@ -185,7 +186,7 @@ class MedicalDocumentControllerWebTest {
                 "{\"title\":\"Analyses\"}".getBytes(StandardCharsets.UTF_8));
 
         mockMvc.perform(multipart("/api/v1/documents").file(metadata)
-                        .with(user("42").authorities(WRITE)))
+                        .with(user("42").authorities(new SimpleGrantedAuthority(WRITE))))
                 .andExpect(status().isBadRequest());
     }
 
@@ -201,7 +202,7 @@ class MedicalDocumentControllerWebTest {
                 "analyses.pdf", "application/pdf", content.length, content));
 
         mockMvc.perform(get("/api/v1/documents/99/download")
-                        .with(user("42").authorities(READ)))
+                        .with(user("42").authorities(new SimpleGrantedAuthority(READ))))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Content-Disposition",
                         org.hamcrest.Matchers.containsString("attachment")))
@@ -217,7 +218,7 @@ class MedicalDocumentControllerWebTest {
     @DisplayName("Sans autorite de lecture, la lecture est refusee (403)")
     void deniesReadWithoutAuthority() throws Exception {
         mockMvc.perform(get("/api/v1/documents")
-                        .with(user("42").authorities(SHARE)))
+                        .with(user("42").authorities(new SimpleGrantedAuthority(SHARE))))
                 .andExpect(status().isForbidden());
 
         verify(queryUseCase, never()).myDocuments(any());
@@ -229,7 +230,7 @@ class MedicalDocumentControllerWebTest {
         mockMvc.perform(post("/api/v1/documents/99/shares")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"granteeUserId\":7,\"permission\":\"VIEW\"}")
-                        .with(user("42").authorities(READ)))
+                        .with(user("42").authorities(new SimpleGrantedAuthority(READ))))
                 .andExpect(status().isForbidden());
 
         verify(sharingUseCase, never()).share(any());
@@ -246,7 +247,7 @@ class MedicalDocumentControllerWebTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"granteeUserId\":7,\"permission\":\"VIEW_AND_DOWNLOAD\""
                                 + ",\"reason\":\"Avis\"}")
-                        .with(user("42").authorities(SHARE)))
+                        .with(user("42").authorities(new SimpleGrantedAuthority(SHARE))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("share-1"))
                 .andExpect(jsonPath("$.active").value(true));
@@ -256,7 +257,7 @@ class MedicalDocumentControllerWebTest {
     @DisplayName("POST /archive repond 204 sans contenu")
     void archivesWithNoContent() throws Exception {
         mockMvc.perform(post("/api/v1/documents/99/archive")
-                        .with(user("42").authorities(WRITE)))
+                        .with(user("42").authorities(new SimpleGrantedAuthority(WRITE))))
                 .andExpect(status().isNoContent());
 
         verify(documentUseCase).archive(99L);
@@ -270,7 +271,7 @@ class MedicalDocumentControllerWebTest {
         mockMvc.perform(put("/api/v1/documents/99/category")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"category\":\"LAB_RESULT\"}")
-                        .with(user("42").authorities(WRITE)))
+                        .with(user("42").authorities(new SimpleGrantedAuthority(WRITE))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.category").value("LAB_RESULT"));
 
