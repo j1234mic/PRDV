@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.prdv.rdv.iam.adapter.in.web.dto.PractitionerDtos;
 import com.prdv.rdv.iam.application.command.ProfileCommands;
 import com.prdv.rdv.iam.application.port.input.KycDocumentsUseCase;
-import com.prdv.rdv.iam.application.port.output.AuditLogRepository;
 import com.prdv.rdv.iam.application.port.output.BankAccountVerificationPort;
 import com.prdv.rdv.iam.application.port.output.ContractRepository;
 import com.prdv.rdv.iam.application.port.output.DomainEventPublisher;
@@ -18,6 +17,7 @@ import com.prdv.rdv.iam.application.port.output.UserRepository;
 import com.prdv.rdv.iam.application.result.Views;
 import com.prdv.rdv.iam.application.service.support.AuditLogger;
 import com.prdv.rdv.iam.application.service.support.RegistrationSupport;
+import com.prdv.rdv.iam.application.service.support.TransactionalStateSaver;
 import com.prdv.rdv.iam.application.service.support.ViewMapper;
 import com.prdv.rdv.iam.domain.exception.IamErrorCode;
 import com.prdv.rdv.iam.domain.exception.IamException;
@@ -86,7 +86,7 @@ class PractitionerMembershipTest {
     @Mock
     private SecurityContextPort securityContext;
     @Mock
-    private AuditLogRepository auditLogRepository;
+    private TransactionalStateSaver stateSaver;
     @Mock
     private DomainEventPublisher eventPublisher;
 
@@ -95,7 +95,7 @@ class PractitionerMembershipTest {
     @BeforeEach
     void setUp() {
         ViewMapper viewMapper = new ViewMapper();
-        AuditLogger auditLogger = new AuditLogger(auditLogRepository, FIXED_CLOCK);
+        AuditLogger auditLogger = new AuditLogger(stateSaver, FIXED_CLOCK);
         service = new PractitionerRegistrationService(
                 registrationSupport, userRepository, practitionerProfileRepository,
                 establishmentProfileRepository, medicalRegistry, bankVerification,
