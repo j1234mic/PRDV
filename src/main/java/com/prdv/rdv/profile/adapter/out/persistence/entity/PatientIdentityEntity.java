@@ -60,7 +60,7 @@ public class PatientIdentityEntity extends ProfileEntity {
     @Column(length = 120)
     private String birthPlace;
 
-    @Column(length = 3)
+    @Column(length = 100)
     private String birthCountry;
 
     @Enumerated(EnumType.STRING)
@@ -71,7 +71,7 @@ public class PatientIdentityEntity extends ProfileEntity {
     @Column(length = 25)
     private PatientIdentity.MaritalStatus maritalStatus;
 
-    @Column(length = 3)
+    @Column(length = 100)
     private String nationality;
 
     // --- Coordonnees ----------------------------------------------------
