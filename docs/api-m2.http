@@ -93,7 +93,7 @@ Content-Type: application/json
   ]
 }
 
-### 6. Personne à prévenir en cas d'urgence
+### 6. Personne à prévenir en cas d'urgence (lien de parenté facultatif, 60 caractères max)
 PUT {{base}}/profile/emergency-contact
 Authorization: Bearer {{patientToken}}
 Content-Type: application/json

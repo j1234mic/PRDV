@@ -189,6 +189,8 @@ public class PatientIdentity {
             }
             firstName = firstName.trim();
             lastName = lastName.trim();
+            relationship = relationship == null || relationship.isBlank()
+                    ? null : relationship.trim();
         }
 
         public String fullName() {
