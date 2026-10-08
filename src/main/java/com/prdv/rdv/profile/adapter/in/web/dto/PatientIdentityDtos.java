@@ -89,7 +89,7 @@ public final class PatientIdentityDtos {
 
     public record EmergencyContactRequest(@NotBlank @Size(max = 100) String firstName,
                                           @NotBlank @Size(max = 100) String lastName,
-                                          @NotBlank @Size(max = 100) String relationship,
+                                          @Size(max = 60) String relationship,
                                           @Size(max = 50) String phone,
                                           @Size(max = 255) String email) {
 
