@@ -113,7 +113,7 @@ d'autre que lui-même (hors `java.*` et Lombok).
 - **Référentiels réels** : remplacer les stubs `StubMedicalRegistryAdapter`,
   `StubIdentityVerificationAdapter`, `StubBankAccountVerificationAdapter`.
 - **Stockage KYC** : `LocalDocumentStorageAdapter` → S3/GCS via `DocumentStoragePort`.
-- **Migrations** : pour la production, préférer Flyway/Liquibase à `ddl-auto=update`.
+- **Migrations** : pour la production, préférer Flyway/Liquibase à `ddl-auto=update`. En attendant, `EnumColumnReconciler` (`common/persistence`) convertit au démarrage les colonnes `ENUM` natives en `VARCHAR`, car `ddl-auto=update` ne modifie jamais une colonne existante.
 
 ## 7. Règles de nommage des permissions
 
