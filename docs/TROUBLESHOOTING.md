@@ -80,6 +80,76 @@ Un test de non-régression couvre ce cas :
 (vérifie l'URL de `application.yml` **et** ouvre réellement une base H2 fichier avec
 ces réglages — une base `mem:` ignorerait `AUTO_SERVER` et ne détecterait rien).
 
+## `Valeur non permise pour la colonne` (H2 `22030`) à l'insertion dans `audit_logs`
+
+**Message typique :**
+
+```
+Valeur non permise pour la colonne "('USER_REGISTERED', 'OTP_REQUESTED', ..., 'SOCIAL_LOGIN')": "PROFILE_UPDATED"
+insert into audit_logs (action,created_at,detail,ip_address,outcome,resource_id,resource_type,user_id,id) values (...) [22030-224]
+```
+
+### Cause
+
+Hibernate crée les attributs `@Enumerated(EnumType.STRING)` en colonnes `ENUM` natives sur H2 et sur MySQL : la liste des valeurs acceptées est figée à la création de la table.
+
+La base `./data/prdv` a été créée avant l'ajout des actions du module 2 : `audit_logs.action` n'acceptait que les 25 valeurs du module 1 (de `USER_REGISTERED` à `SOCIAL_LOGIN`). L'action `PROFILE_UPDATED`, écrite par le module profil, est donc refusée.
+
+`ddl-auto: update` ajoute les tables et colonnes manquantes, mais **ne modifie jamais une colonne existante** : sans correction, redémarrer l'application ne suffit pas. Le même blocage touche toute colonne `ENUM` dont l'énumération Java a été étendue après la création de la table.
+
+### Solutions
+
+#### Solution 1 — Correction automatique au démarrage (recommandée)
+
+Depuis cette version, `EnumColumnReconciler` (`src/main/java/com/prdv/rdv/common/persistence/`) convertit **toutes** les colonnes `ENUM` du schéma en `VARCHAR(255)` au démarrage, juste après le `ddl-auto` de Hibernate et avant l'ouverture du serveur HTTP :
+
+```bash
+git pull
+mvn spring-boot:run
+```
+
+Le journal confirme la conversion :
+
+```
+WARN  c.p.r.c.persistence.EnumColumnReconciler : Colonnes ENUM converties en VARCHAR(255) : [AUDIT_LOGS.ACTION, AUDIT_LOGS.OUTCOME, KYC_DOCUMENTS.STATUS, ...]
+```
+
+- **Sans perte** : les lignes existantes, la contrainte `NOT NULL` et les index sont conservés.
+- **Idempotente** : aux démarrages suivants, plus aucune colonne n'est détectée.
+- **Conditionnée au mode du schéma** : elle n'agit que si `spring.jpa.hibernate.ddl-auto` vaut `update`, `create` ou `create-drop`. Avec `none` ou `validate`, l'application ne modifie jamais le schéma.
+
+#### Solution 2 — Schéma géré hors Hibernate (`ddl-auto: none` ou `validate`)
+
+Listez les colonnes `ENUM`, puis convertissez-les avec votre outil de migration :
+
+```sql
+-- MySQL
+SELECT TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+ WHERE TABLE_SCHEMA = DATABASE() AND DATA_TYPE = 'enum';
+ALTER TABLE audit_logs MODIFY COLUMN action VARCHAR(255) NULL;
+
+-- H2 (conserve la nullabilité)
+SELECT TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+ WHERE TABLE_SCHEMA = 'PUBLIC' AND DATA_TYPE = 'ENUM';
+ALTER TABLE audit_logs ALTER COLUMN action SET DATA TYPE VARCHAR(255);
+```
+
+Répétez l'opération pour chaque colonne listée.
+
+#### Solution 3 — Repartir d'une base vide (développement uniquement)
+
+Les comptes et données créés localement sont alors perdus :
+
+```bash
+rm -rf ./data
+mvn spring-boot:run
+```
+
+### Tests de non-régression
+
+- `src/test/java/com/prdv/rdv/common/persistence/EnumColumnMigrationTest.java` : schéma legacy à 25 valeurs ; `PROFILE_UPDATED` et toutes les actions acceptées après conversion, données, `NOT NULL` et index conservés, idempotence.
+- `src/test/java/com/prdv/rdv/common/persistence/EnumColumnReconcilerTest.java` : conversion uniquement lorsque `ddl-auto` est géré par Hibernate.
+
 ## `Communications link failure` / `Connexion refusée` / `Unable to open JDBC Connection`
 
 **Stack trace typique :**

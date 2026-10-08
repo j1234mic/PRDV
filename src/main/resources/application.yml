@@ -37,6 +37,8 @@ spring:
       minimum-idle: 2
   jpa:
     hibernate:
+      # update : Hibernate n'altere jamais une colonne existante. Les colonnes ENUM natives
+      # sont converties en VARCHAR au demarrage (common/persistence/EnumColumnReconciler).
       ddl-auto: update
     open-in-view: false
     properties:
