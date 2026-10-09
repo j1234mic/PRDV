@@ -15,6 +15,9 @@ public interface MedicalDocumentQueryUseCase {
 
     ProfileViews.MedicalDocumentView document(Long documentId);
 
-    /** Telechargement controle : le droit de lecture est verifie avant l'envoi des octets. */
+    /** Telechargement controle (version courante) : le droit de lecture est verifie avant l'envoi des octets. */
     ProfileViews.DocumentFile download(Long documentId);
+
+    /** Telechargement d'une version precise de l'historique (1 = depot initial), memes controles. */
+    ProfileViews.DocumentFile downloadVersion(Long documentId, int version);
 }

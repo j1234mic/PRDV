@@ -8,9 +8,11 @@ import com.prdv.rdv.profile.application.port.output.ProfileAuditPort;
 import com.prdv.rdv.profile.application.port.output.ProfileEventPublisher;
 import com.prdv.rdv.profile.application.result.ProfileViews;
 import com.prdv.rdv.profile.application.service.support.ProfileAccessGuard;
+import com.prdv.rdv.profile.application.service.support.HealthMetricRecorder;
 import com.prdv.rdv.profile.application.service.support.ProfileAuditTrail;
 import com.prdv.rdv.profile.application.service.support.ProfileViewMapper;
 import com.prdv.rdv.profile.domain.event.ProfileEvent;
+import com.prdv.rdv.profile.domain.model.health.HealthMetric;
 import com.prdv.rdv.profile.domain.model.medical.BloodGroup;
 import com.prdv.rdv.profile.domain.model.medical.BodyMetrics;
 import com.prdv.rdv.profile.domain.model.medical.MedicalRecord;
@@ -20,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -39,6 +42,7 @@ public class MedicalRecordCommandService implements MedicalRecordCommandUseCase 
     private final ProfileViewMapper viewMapper;
     private final ProfileAuditTrail auditTrail;
     private final ProfileEventPublisher eventPublisher;
+    private final HealthMetricRecorder healthMetricRecorder;
     private final Clock clock;
 
     public MedicalRecordCommandService(MedicalRecordRepository recordRepository,
@@ -47,7 +51,9 @@ public class MedicalRecordCommandService implements MedicalRecordCommandUseCase 
                                        ProfileViewMapper viewMapper,
                                        ProfileAuditTrail auditTrail,
                                        ProfileEventPublisher eventPublisher,
+                                       HealthMetricRecorder healthMetricRecorder,
                                        Clock clock) {
+        this.healthMetricRecorder = healthMetricRecorder;
         this.recordRepository = recordRepository;
         this.currentUser = currentUser;
         this.accessGuard = accessGuard;
@@ -226,8 +232,14 @@ public class MedicalRecordCommandService implements MedicalRecordCommandUseCase 
         VitalSigns signs = new VitalSigns(command.systolicMmHg(), command.diastolicMmHg(),
                 command.heartRateBpm(), command.temperatureCelsius(), command.oxygenSaturationPercent(),
                 command.respiratoryRatePerMin(), bodyMetrics, clock.instant());
-        return apply(patientUserId, "constantes vitales",
+        ProfileViews.MedicalRecordView view = apply(patientUserId, "constantes vitales",
                 record -> record.recordVitalSigns(signs, clock));
+        // Une saisie manuelle suit le chemin des objets connectes : graphiques, alertes automatiques, historique.
+        List<HealthMetric> metrics = signs.toHealthMetrics(patientUserId, "MANUAL");
+        if (!metrics.isEmpty()) {
+            healthMetricRecorder.record(patientUserId, null, metrics, "MANUAL");
+        }
+        return view;
     }
 
     // ------------------------------------------------------------------

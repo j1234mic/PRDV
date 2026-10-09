@@ -113,6 +113,7 @@ public final class ProfileViews {
                                       VitaleCardView vitaleCard,
                                       HealthInsuranceView primaryInsurance,
                                       HealthInsuranceView complementaryInsurance,
+                                      List<HealthInsuranceView> otherInsurances,
                                       DmpAccountView dmp,
                                       Instant createdAt,
                                       Instant updatedAt) {
@@ -513,7 +514,9 @@ public final class ProfileViews {
                                    boolean closed, String note) {
     }
 
-    public record LocationPhotoView(String storageKey, PracticeLocation.PhotoType type, String caption) {
+    /** Photo de cabinet : {@code id} sert aux URL de consultation et de suppression. */
+    public record LocationPhotoView(String id, String storageKey, PracticeLocation.PhotoType type,
+                                    String caption) {
     }
 
     public record PracticeLocationView(String id,

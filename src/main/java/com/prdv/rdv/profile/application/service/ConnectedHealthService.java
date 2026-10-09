@@ -5,14 +5,12 @@ import com.prdv.rdv.profile.application.port.input.ConnectedHealthUseCase;
 import com.prdv.rdv.profile.application.port.output.ConnectedDeviceRepository;
 import com.prdv.rdv.profile.application.port.output.ConnectedHealthProviderPort;
 import com.prdv.rdv.profile.application.port.output.CurrentUserPort;
-import com.prdv.rdv.profile.application.port.output.HealthAlertNotifierPort;
-import com.prdv.rdv.profile.application.port.output.HealthAlertRepository;
-import com.prdv.rdv.profile.application.port.output.HealthMetricRepository;
 import com.prdv.rdv.profile.application.port.output.ProfileAuditPort;
 import com.prdv.rdv.profile.application.port.output.ProfileEventPublisher;
 import com.prdv.rdv.profile.application.result.ProfileViews;
 import com.prdv.rdv.profile.application.service.support.ProfileAccessGuard;
 import com.prdv.rdv.profile.application.service.support.ProfileAuditTrail;
+import com.prdv.rdv.profile.application.service.support.HealthMetricRecorder;
 import com.prdv.rdv.profile.application.service.support.ProfileViewMapper;
 import com.prdv.rdv.profile.config.ProfileProperties;
 import com.prdv.rdv.profile.domain.event.ProfileEvent;
@@ -20,7 +18,6 @@ import com.prdv.rdv.profile.domain.exception.ProfileErrorCode;
 import com.prdv.rdv.profile.domain.exception.ProfileException;
 import com.prdv.rdv.profile.domain.model.health.ConnectedDevice;
 import com.prdv.rdv.profile.domain.model.health.HealthAlert;
-import com.prdv.rdv.profile.domain.model.health.HealthAlertEvaluator;
 import com.prdv.rdv.profile.domain.model.health.HealthMetric;
 import com.prdv.rdv.profile.domain.model.preference.PrivacyPreferences;
 import org.slf4j.Logger;
@@ -53,11 +50,8 @@ public class ConnectedHealthService implements ConnectedHealthUseCase {
     private static final Logger log = LoggerFactory.getLogger(ConnectedHealthService.class);
 
     private final ConnectedDeviceRepository deviceRepository;
-    private final HealthMetricRepository metricRepository;
-    private final HealthAlertRepository alertRepository;
     private final List<ConnectedHealthProviderPort> providers;
-    private final HealthAlertEvaluator alertEvaluator;
-    private final HealthAlertNotifierPort alertNotifier;
+    private final HealthMetricRecorder metricRecorder;
     private final CurrentUserPort currentUser;
     private final ProfileAccessGuard accessGuard;
     private final ProfileViewMapper viewMapper;
@@ -67,11 +61,8 @@ public class ConnectedHealthService implements ConnectedHealthUseCase {
     private final Clock clock;
 
     public ConnectedHealthService(ConnectedDeviceRepository deviceRepository,
-                                  HealthMetricRepository metricRepository,
-                                  HealthAlertRepository alertRepository,
                                   List<ConnectedHealthProviderPort> providers,
-                                  HealthAlertEvaluator alertEvaluator,
-                                  HealthAlertNotifierPort alertNotifier,
+                                  HealthMetricRecorder metricRecorder,
                                   CurrentUserPort currentUser,
                                   ProfileAccessGuard accessGuard,
                                   ProfileViewMapper viewMapper,
@@ -80,11 +71,8 @@ public class ConnectedHealthService implements ConnectedHealthUseCase {
                                   ProfileProperties properties,
                                   Clock clock) {
         this.deviceRepository = deviceRepository;
-        this.metricRepository = metricRepository;
-        this.alertRepository = alertRepository;
         this.providers = providers;
-        this.alertEvaluator = alertEvaluator;
-        this.alertNotifier = alertNotifier;
+        this.metricRecorder = metricRecorder;
         this.currentUser = currentUser;
         this.accessGuard = accessGuard;
         this.viewMapper = viewMapper;
@@ -212,26 +200,10 @@ public class ConnectedHealthService implements ConnectedHealthUseCase {
 
     // ------------------------------------------------------------------
 
-    /** Persiste les mesures, evalue les alertes et notifie le patient. */
+    /** Persiste les mesures, evalue les alertes et notifie le patient (voir {@link HealthMetricRecorder}). */
     private SyncOutcome persist(Long userId, String deviceId, List<HealthMetric> metrics, String source) {
-        List<HealthMetric> stamped = metrics.stream()
-                .map(metric -> metric.deviceId() == null && deviceId != null
-                        ? HealthMetric.of(userId, deviceId, metric.type(), metric.value(), metric.context(),
-                        metric.recordedAt(), source)
-                        : metric)
-                .toList();
-        List<HealthMetric> saved = metricRepository.saveAll(stamped);
-        List<HealthAlert> alerts = alertEvaluator.evaluateAll(saved, userId, clock);
-        if (!alerts.isEmpty()) {
-            alertRepository.saveAll(alerts);
-            alertNotifier.notify(userId, alerts);
-            alerts.forEach(alert -> eventPublisher.publish(new ProfileEvent.HealthAlertTriggered(userId,
-                    alert.getMetricType().name(), String.valueOf(alert.getObservedValue()),
-                    alert.getSeverity().name(), alert.getMessage(), clock.instant())));
-            auditTrail.success(ProfileAuditPort.ProfileAuditAction.HEALTH_ALERT_TRIGGERED, userId,
-                    "HealthAlert", null, alerts.size() + " alertes declenchees");
-        }
-        return new SyncOutcome(saved, alerts, 0);
+        HealthMetricRecorder.Outcome outcome = metricRecorder.record(userId, deviceId, metrics, source);
+        return new SyncOutcome(outcome.accepted(), outcome.alerts(), 0);
     }
 
     private ConnectedHealthProviderPort providerFor(ConnectedDevice device) {

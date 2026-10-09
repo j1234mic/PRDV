@@ -13,6 +13,18 @@ public interface PatientIdentityUseCase {
 
     ProfileViews.PatientIdentityView identityOf(Long patientUserId);
 
+    /** Photo de profil : soi-meme, ou un praticien autorise (categorie IDENTITY). */
+    ProfileViews.DocumentFile profilePhoto(Long patientUserId);
+
+    /** Ma photo de profil (raccourci de {@link #profilePhoto(Long)} pour le demandeur). */
+    ProfileViews.DocumentFile myProfilePhoto();
+
+    /** Piece d'identite : reservee au patient, jamais exposee aux praticiens. */
+    ProfileViews.DocumentFile myIdentityDocument();
+
+    /** Scan de la carte Vitale : reserve au patient. */
+    ProfileViews.DocumentFile myVitaleScan();
+
     ProfileViews.PatientIdentityView updateCivilStatus(PatientIdentityCommands.UpdateCivilStatus command);
 
     ProfileViews.PatientIdentityView replaceContacts(PatientIdentityCommands.ReplaceContacts command);

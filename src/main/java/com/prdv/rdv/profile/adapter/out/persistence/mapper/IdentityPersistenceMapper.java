@@ -7,8 +7,10 @@ import com.prdv.rdv.profile.domain.model.preference.PrivacyPreferences;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Mapper domaine &lt;-&gt; entites JPA pour l'identite patient et les
@@ -87,6 +89,9 @@ public class IdentityPersistenceMapper {
         if (identity.getComplementaryInsurance() != null) {
             insurances.add(identity.getComplementaryInsurance());
         }
+        if (identity.getOtherInsurances() != null) {
+            insurances.addAll(identity.getOtherInsurances());
+        }
         entity.setInsurances(insurances);
 
         PatientIdentity.DmpAccount dmp = identity.getDmpAccount();
@@ -152,9 +157,19 @@ public class IdentityPersistenceMapper {
                     .findFirst()
                     .ifPresent(identity::setPrimaryInsurance);
             entity.getInsurances().stream()
-                    .filter(PatientIdentity.HealthInsurance::isComplementary)
+                    .filter(insurance -> insurance.type() == PatientIdentity.InsuranceType.COMPLEMENTARY)
                     .findFirst()
                     .ifPresent(identity::setComplementaryInsurance);
+            // Les autres couvertures (CMU-C, AME, privee, etrangere) : une par type, sans perte.
+            Map<PatientIdentity.InsuranceType, PatientIdentity.HealthInsurance> others = new LinkedHashMap<>();
+            for (PatientIdentity.HealthInsurance insurance : entity.getInsurances()) {
+                if (insurance.type() == PatientIdentity.InsuranceType.PRINCIPAL
+                        || insurance.type() == PatientIdentity.InsuranceType.COMPLEMENTARY) {
+                    continue;
+                }
+                others.putIfAbsent(insurance.type(), insurance);
+            }
+            identity.setOtherInsurances(new ArrayList<>(others.values()));
         }
 
         if (entity.isDmpLinked() || entity.getDmpIdentifier() != null) {

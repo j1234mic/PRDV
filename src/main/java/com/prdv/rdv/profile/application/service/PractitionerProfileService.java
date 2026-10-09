@@ -15,6 +15,7 @@ import com.prdv.rdv.profile.application.result.ProfileViews;
 import com.prdv.rdv.profile.application.service.support.MedicalFilePolicy;
 import com.prdv.rdv.profile.application.service.support.ProfileAuditTrail;
 import com.prdv.rdv.profile.application.service.support.ProfileViewMapper;
+import com.prdv.rdv.profile.application.service.support.ReplacedFileCleaner;
 import com.prdv.rdv.profile.config.ProfileProperties;
 import com.prdv.rdv.profile.domain.event.ProfileEvent;
 import com.prdv.rdv.profile.domain.exception.ProfileErrorCode;
@@ -53,6 +54,7 @@ public class PractitionerProfileService implements PractitionerProfileUseCase {
     private final PracticeLocationRepository locationRepository;
     private final PractitionerVerificationPort verificationPort;
     private final MedicalFileStoragePort fileStorage;
+    private final ReplacedFileCleaner replacedFileCleaner;
     private final SensitiveDataProtector sensitiveData;
     private final MedicalFilePolicy filePolicy;
     private final CurrentUserPort currentUser;
@@ -74,7 +76,9 @@ public class PractitionerProfileService implements PractitionerProfileUseCase {
                                       ProfileAuditTrail auditTrail,
                                       ProfileEventPublisher eventPublisher,
                                       ProfileProperties properties,
+                                      ReplacedFileCleaner replacedFileCleaner,
                                       Clock clock) {
+        this.replacedFileCleaner = replacedFileCleaner;
         this.dossierRepository = dossierRepository;
         this.ratingRepository = ratingRepository;
         this.locationRepository = locationRepository;
@@ -189,8 +193,11 @@ public class PractitionerProfileService implements PractitionerProfileUseCase {
         MedicalFileStoragePort.StoredFile stored = fileStorage.store(
                 properties.getMedia().getPractitionerFolder() + "/" + userId + "/photo",
                 command.originalFilename(), command.contentType(), command.content());
+        String previousKey = dossier.getIdentity().photoStorageKey();
         dossier.updateIdentity(dossier.getIdentity().withPhoto(stored.storageKey()), clock);
-        return saveAndAudit(dossier, "photo professionnelle");
+        ProfileViews.PractitionerDossierView view = saveAndAudit(dossier, "photo professionnelle");
+        replacedFileCleaner.discardReplaced(previousKey, stored.storageKey());
+        return view;
     }
 
     @Override
@@ -204,8 +211,11 @@ public class PractitionerProfileService implements PractitionerProfileUseCase {
         MedicalFileStoragePort.StoredFile stored = fileStorage.store(
                 properties.getMedia().getPractitionerFolder() + "/" + userId + "/video",
                 command.originalFilename(), command.contentType(), command.content());
+        String previousKey = dossier.getIdentity().presentationVideoKey();
         dossier.updateIdentity(dossier.getIdentity().withPresentationVideo(stored.storageKey()), clock);
-        return saveAndAudit(dossier, "video de presentation");
+        ProfileViews.PractitionerDossierView view = saveAndAudit(dossier, "video de presentation");
+        replacedFileCleaner.discardReplaced(previousKey, stored.storageKey());
+        return view;
     }
 
     @Override

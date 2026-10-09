@@ -50,7 +50,7 @@ public final class PractitionerDtos {
                                   List<String> subSpecialties,
                                   List<String> skills,
                                   List<@Valid DiplomaRequest> diplomas,
-                                  @Min(0) @Max(80) Integer experienceYears,
+                                  @Min(0) @Max(70) Integer experienceYears,
                                   List<String> languages,
                                   @Size(max = 1000) String shortBio) {
 

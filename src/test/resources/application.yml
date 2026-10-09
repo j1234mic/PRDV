@@ -35,3 +35,5 @@ prdv:
     storage:
       # Fichiers medicaux des tests : ephemeres (repertoire de build)
       local-path: ./target/test-storage/profile
+      # Cle de test (chiffrement au repos des fichiers medicaux, obligatoire au demarrage)
+      encryption-key: test-profile-storage-key-0123456789-test

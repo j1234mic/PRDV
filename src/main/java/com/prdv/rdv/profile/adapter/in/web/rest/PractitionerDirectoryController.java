@@ -3,9 +3,11 @@ package com.prdv.rdv.profile.adapter.in.web.rest;
 import com.prdv.rdv.profile.adapter.in.web.dto.PractitionerDtos;
 import com.prdv.rdv.profile.application.port.input.PractitionerDirectoryUseCase;
 import com.prdv.rdv.profile.application.result.ProfileViews;
+import com.prdv.rdv.profile.domain.model.practitioner.Badge;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,23 +41,44 @@ public class PractitionerDirectoryController {
     }
 
     @GetMapping("/practitioners")
-    @Operation(summary = "Recherche : terme, specialite, ville, teleconsultation, accessibilite PMR")
+    @Operation(summary = "Recherche : terme, specialite, ville, teleconsultation, accessibilite PMR, badge")
     public ProfileViews.PagedResult<ProfileViews.DirectoryEntryView> search(
             @RequestParam(required = false) String term,
             @RequestParam(required = false) String specialty,
             @RequestParam(required = false) String city,
             @RequestParam(defaultValue = "false") boolean teleconsultationOnly,
             @RequestParam(defaultValue = "false") boolean wheelchairAccessibleOnly,
+            @RequestParam(required = false) Badge.BadgeType badge,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size) {
         return directoryUseCase.search(term, specialty, city, teleconsultationOnly,
-                wheelchairAccessibleOnly, page, size);
+                wheelchairAccessibleOnly, badge, page, size);
     }
 
     @GetMapping("/practitioners/{practitionerUserId}")
     @Operation(summary = "Fiche publique (donnees non publiables exclues)")
     public ProfileViews.PractitionerDossierView publicProfile(@PathVariable Long practitionerUserId) {
         return directoryUseCase.publicProfile(practitionerUserId);
+    }
+
+    @GetMapping("/practitioners/{practitionerUserId}/photo")
+    @Operation(summary = "Photo professionnelle (fiche publiable uniquement)")
+    public ResponseEntity<byte[]> practitionerPhoto(@PathVariable Long practitionerUserId) {
+        return FileResponses.of(directoryUseCase.practitionerPhoto(practitionerUserId), false);
+    }
+
+    @GetMapping("/practitioners/{practitionerUserId}/presentation-video")
+    @Operation(summary = "Video de presentation (fiche publiable uniquement)")
+    public ResponseEntity<byte[]> presentationVideo(@PathVariable Long practitionerUserId) {
+        return FileResponses.of(directoryUseCase.presentationVideo(practitionerUserId), false);
+    }
+
+    @GetMapping("/practitioners/{practitionerUserId}/locations/{locationId}/photos/{photoId}")
+    @Operation(summary = "Photo d'un cabinet (identifiant photoId fourni par la fiche du lieu)")
+    public ResponseEntity<byte[]> locationPhoto(@PathVariable Long practitionerUserId,
+                                                @PathVariable String locationId,
+                                                @PathVariable String photoId) {
+        return FileResponses.of(directoryUseCase.locationPhoto(practitionerUserId, locationId, photoId), false);
     }
 
     @GetMapping("/practitioners/{practitionerUserId}/ratings")

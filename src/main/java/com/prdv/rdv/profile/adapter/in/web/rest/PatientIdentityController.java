@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -47,6 +48,34 @@ public class PatientIdentityController {
     @Operation(summary = "Profil d'un patient (soumis aux regles de visibilite)")
     public ProfileViews.PatientIdentityView identityOf(@PathVariable Long patientUserId) {
         return identityUseCase.identityOf(patientUserId);
+    }
+
+    @GetMapping("/me/photo")
+    @PreAuthorize("hasAuthority('profile.identity.read')")
+    @Operation(summary = "Ma photo de profil (affichage)")
+    public ResponseEntity<byte[]> myPhoto() {
+        return FileResponses.of(identityUseCase.myProfilePhoto(), false);
+    }
+
+    @GetMapping("/{patientUserId}/photo")
+    @PreAuthorize("hasAuthority('profile.identity.read')")
+    @Operation(summary = "Photo de profil d'un patient (soi-meme, ou praticien autorise : categorie IDENTITY)")
+    public ResponseEntity<byte[]> photoOf(@PathVariable Long patientUserId) {
+        return FileResponses.of(identityUseCase.profilePhoto(patientUserId), false);
+    }
+
+    @GetMapping("/me/identity-document")
+    @PreAuthorize("hasAuthority('profile.identity.read')")
+    @Operation(summary = "Ma piece d'identite (reservee au patient, telechargement trace dans l'audit)")
+    public ResponseEntity<byte[]> myIdentityDocument() {
+        return FileResponses.of(identityUseCase.myIdentityDocument(), true);
+    }
+
+    @GetMapping("/me/vitale-card/scan")
+    @PreAuthorize("hasAuthority('profile.identity.read')")
+    @Operation(summary = "Scan de ma carte Vitale (reserve au patient, telechargement trace dans l'audit)")
+    public ResponseEntity<byte[]> myVitaleScan() {
+        return FileResponses.of(identityUseCase.myVitaleScan(), true);
     }
 
     @PutMapping("/civil-status")

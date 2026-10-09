@@ -11,6 +11,7 @@ import com.prdv.rdv.profile.application.result.ProfileViews;
 import com.prdv.rdv.profile.application.service.support.MedicalFilePolicy;
 import com.prdv.rdv.profile.application.service.support.ProfileAuditTrail;
 import com.prdv.rdv.profile.application.service.support.ProfileViewMapper;
+import com.prdv.rdv.profile.application.service.support.ReplacedFileCleaner;
 import com.prdv.rdv.profile.config.ProfileProperties;
 import com.prdv.rdv.profile.domain.exception.ProfileErrorCode;
 import com.prdv.rdv.profile.domain.exception.ProfileException;
@@ -27,6 +28,10 @@ import java.util.List;
  *
  * <p>Multi-cabinets, geolocalisation (avec geocodage de secours), horaires,
  * photos, visite virtuelle, accessibilite, parking et transports.
+ *
+ * <p>Regle de lieu principal : un seul lieu principal a la fois. Le premier lieu
+ * cree le devient, la suppression du lieu principal designe un remplacant, et
+ * {@link #promoteToMain} change le lieu principal a la demande.
  */
 @Service
 public class PracticeLocationService implements PracticeLocationUseCase {
@@ -34,6 +39,7 @@ public class PracticeLocationService implements PracticeLocationUseCase {
     private final PracticeLocationRepository locationRepository;
     private final AddressGeocodingPort geocoding;
     private final MedicalFileStoragePort fileStorage;
+    private final ReplacedFileCleaner replacedFileCleaner;
     private final MedicalFilePolicy filePolicy;
     private final CurrentUserPort currentUser;
     private final ProfileViewMapper viewMapper;
@@ -49,7 +55,9 @@ public class PracticeLocationService implements PracticeLocationUseCase {
                                    ProfileViewMapper viewMapper,
                                    ProfileAuditTrail auditTrail,
                                    ProfileProperties properties,
+                                   ReplacedFileCleaner replacedFileCleaner,
                                    Clock clock) {
+        this.replacedFileCleaner = replacedFileCleaner;
         this.locationRepository = locationRepository;
         this.geocoding = geocoding;
         this.fileStorage = fileStorage;
@@ -80,8 +88,10 @@ public class PracticeLocationService implements PracticeLocationUseCase {
     @Transactional
     public ProfileViews.PracticeLocationView create(PractitionerProfileCommands.CreateLocation command) {
         Long userId = currentUser.requireCurrentUserId();
+        // Le premier lieu d'un praticien devient automatiquement son lieu principal.
+        boolean main = command.mainLocation() || locationRepository.findByPractitionerUserId(userId).isEmpty();
         PracticeLocation location = PracticeLocation.create(userId, command.name(), command.line1(),
-                command.postalCode(), command.city(), command.country(), command.mainLocation(), clock);
+                command.postalCode(), command.city(), command.country(), main, clock);
         location.setLine2(command.line2());
         applyGeolocation(location, command.latitude(), command.longitude());
         location.replaceOpeningHours(openingHours(command.openingHours()), clock);
@@ -90,9 +100,9 @@ public class PracticeLocationService implements PracticeLocationUseCase {
         location.updateAccessibility(command.wheelchairAccessible(), command.parkingAvailable(),
                 command.publicTransportInfo(), clock);
         if (command.socialLinks() != null) {
-            command.socialLinks().forEach((platform, url) -> location.addSocialLink(platform, url, clock));
+            location.replaceSocialLinks(command.socialLinks(), clock);
         }
-        if (command.mainLocation()) {
+        if (main) {
             demoteOtherMainLocations(userId);
         }
 
@@ -125,8 +135,9 @@ public class PracticeLocationService implements PracticeLocationUseCase {
                 command.website(), command.virtualTourUrl(), clock);
         location.updateAccessibility(command.wheelchairAccessible(), command.parkingAvailable(),
                 command.publicTransportInfo(), clock);
+        // Carte fournie : elle remplace les reseaux existants (une carte vide les retire tous).
         if (command.socialLinks() != null) {
-            command.socialLinks().forEach((platform, url) -> location.addSocialLink(platform, url, clock));
+            location.replaceSocialLinks(command.socialLinks(), clock);
         }
 
         PracticeLocation saved = locationRepository.save(location);
@@ -140,16 +151,35 @@ public class PracticeLocationService implements PracticeLocationUseCase {
     public void delete(String locationId) {
         Long userId = currentUser.requireCurrentUserId();
         PracticeLocation location = requireOwned(locationId, userId);
-        location.getPhotos().forEach(photo -> {
-            try {
-                fileStorage.delete(photo.storageKey());
-            } catch (RuntimeException e) {
-                // La suppression du fichier ne doit pas empecher celle du lieu d'exercice.
-            }
-        });
+        boolean wasMain = location.isMainLocation();
+        // Les photos du cabinet ne sont supprimees qu'une fois la suppression du lieu validee.
+        replacedFileCleaner.discardAfterCommit(location.mediaStorageKeys());
         locationRepository.deleteById(locationId);
+        if (wasMain) {
+            // Le cabinet supprime etait le principal : un autre lieu prend le relais.
+            locationRepository.findByPractitionerUserId(userId).stream()
+                    .filter(remaining -> !locationId.equals(remaining.getId()))
+                    .findFirst()
+                    .ifPresent(successor -> {
+                        successor.promoteToMain(clock);
+                        locationRepository.save(successor);
+                    });
+        }
         auditTrail.success(ProfileAuditPort.ProfileAuditAction.PRACTITIONER_PROFILE_UPDATED, userId,
                 "PracticeLocation", locationId, "lieu d'exercice supprime");
+    }
+
+    @Override
+    @Transactional
+    public ProfileViews.PracticeLocationView promoteToMain(String locationId) {
+        Long userId = currentUser.requireCurrentUserId();
+        PracticeLocation location = requireOwned(locationId, userId);
+        demoteOtherMainLocations(userId);
+        location.promoteToMain(clock);
+        PracticeLocation saved = locationRepository.save(location);
+        auditTrail.success(ProfileAuditPort.ProfileAuditAction.PRACTITIONER_PROFILE_UPDATED, userId,
+                "PracticeLocation", locationId, "lieu principal modifie");
+        return viewMapper.locationView(saved, LocalDateTime.now(clock));
     }
 
     @Override
@@ -170,12 +200,15 @@ public class PracticeLocationService implements PracticeLocationUseCase {
 
     @Override
     @Transactional
-    public void removePhoto(String locationId, String photoStorageKey) {
+    public void removePhoto(String locationId, String photoId) {
         Long userId = currentUser.requireCurrentUserId();
         PracticeLocation location = requireOwned(locationId, userId);
-        location.removePhoto(photoStorageKey, clock);
+        PracticeLocation.Photo removed = location.removePhotoById(photoId, clock);
         locationRepository.save(location);
-        fileStorage.delete(photoStorageKey);
+        // Le fichier n'est supprime qu'une fois la transaction validee.
+        replacedFileCleaner.discardAfterCommit(List.of(removed.storageKey()));
+        auditTrail.success(ProfileAuditPort.ProfileAuditAction.PRACTITIONER_PROFILE_UPDATED, userId,
+                "PracticeLocation", locationId, "photo de cabinet supprimee");
     }
 
     // ------------------------------------------------------------------
@@ -205,7 +238,7 @@ public class PracticeLocationService implements PracticeLocationUseCase {
     private void demoteOtherMainLocations(Long userId) {
         locationRepository.findByPractitionerUserId(userId).forEach(existing -> {
             if (existing.isMainLocation()) {
-                existing.setMainLocation(false);
+                existing.demoteFromMain(clock);
                 locationRepository.save(existing);
             }
         });

@@ -21,5 +21,9 @@ public interface PracticeLocationUseCase {
 
     ProfileViews.PracticeLocationView addPhoto(PractitionerProfileCommands.AddLocationPhoto command);
 
-    void removePhoto(String locationId, String photoStorageKey);
+    /** Supprime une photo de cabinet par son identifiant (photoId). */
+    void removePhoto(String locationId, String photoId);
+
+    /** Designe ce lieu comme principal ; l'ancien lieu principal n'est plus principal. */
+    ProfileViews.PracticeLocationView promoteToMain(String locationId);
 }

@@ -38,6 +38,8 @@ public class IamProfileAuditAdapter implements ProfileAuditPort {
             case MEDICAL_RECORD_ACCESSED -> AuditLog.Action.MEDICAL_RECORD_ACCESSED;
             case MEDICAL_DOCUMENT_UPLOADED -> AuditLog.Action.MEDICAL_DOCUMENT_UPLOADED;
             case MEDICAL_DOCUMENT_DOWNLOADED -> AuditLog.Action.MEDICAL_DOCUMENT_DOWNLOADED;
+            // Un fichier d'identite ou multimedia est trace comme un telechargement de document.
+            case MEDIA_DOWNLOADED -> AuditLog.Action.MEDICAL_DOCUMENT_DOWNLOADED;
             case MEDICAL_DOCUMENT_SHARED -> AuditLog.Action.MEDICAL_DOCUMENT_SHARED;
             case CONSENT_RECORDED -> AuditLog.Action.CONSENT_RECORDED;
             case VISIBILITY_UPDATED -> AuditLog.Action.VISIBILITY_UPDATED;

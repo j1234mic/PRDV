@@ -78,11 +78,25 @@ public class MedicalDocumentQueryService implements MedicalDocumentQueryUseCase 
     @Transactional(readOnly = true)
     public ProfileViews.DocumentFile download(Long documentId) {
         Long userId = currentUser.requireCurrentUserId();
-        MedicalDocument document = requireAccessibleDocument(documentId);
+        MedicalDocument document = requireDownloadableDocument(documentId, userId);
+        return fileOf(documentId, userId, document.currentVersion());
+    }
 
-        // Un partage VIEW ouvre la consultation des metadonnees, pas l'acces
-        // aux octets : seuls le proprietaire et les partages VIEW_AND_DOWNLOAD
-        // peuvent telecharger (granularite « qui peut voir quoi »).
+    @Override
+    @Transactional(readOnly = true)
+    public ProfileViews.DocumentFile downloadVersion(Long documentId, int version) {
+        Long userId = currentUser.requireCurrentUserId();
+        MedicalDocument document = requireDownloadableDocument(documentId, userId);
+        return fileOf(documentId, userId, document.versionNumbered(version));
+    }
+
+    /**
+     * Acces en lecture puis droit de telechargement. Un partage VIEW ouvre la
+     * consultation des metadonnees, pas l'acces aux octets : seuls le proprietaire
+     * et les partages VIEW_AND_DOWNLOAD peuvent telecharger (granularite « qui peut voir quoi »).
+     */
+    private MedicalDocument requireDownloadableDocument(Long documentId, Long userId) {
+        MedicalDocument document = requireAccessibleDocument(documentId);
         if (!document.allowsDownload(userId, clock)) {
             auditTrail.failure(ProfileAuditPort.ProfileAuditAction.MEDICAL_DOCUMENT_DOWNLOADED, userId,
                     "MedicalDocument", String.valueOf(documentId),
@@ -90,8 +104,10 @@ public class MedicalDocumentQueryService implements MedicalDocumentQueryUseCase 
             throw ProfileException.of(ProfileErrorCode.ACCESS_DENIED,
                     "Ce partage ne permet pas le telechargement du document");
         }
+        return document;
+    }
 
-        MedicalDocument.DocumentVersion version = document.currentVersion();
+    private ProfileViews.DocumentFile fileOf(Long documentId, Long userId, MedicalDocument.DocumentVersion version) {
         byte[] content = fileStorage.retrieve(version.storageKey());
 
         auditTrail.success(ProfileAuditPort.ProfileAuditAction.MEDICAL_DOCUMENT_DOWNLOADED, userId,

@@ -87,10 +87,18 @@ public class PracticeLocationController {
         return locationUseCase.addPhoto(request.toCommand(locationId, file));
     }
 
-    @DeleteMapping("/{locationId}/photos/{storageKey}")
+    @DeleteMapping("/{locationId}/photos/{photoId}")
     @PreAuthorize("hasAuthority('profile.location.write')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void removePhoto(@PathVariable String locationId, @PathVariable String storageKey) {
-        locationUseCase.removePhoto(locationId, storageKey);
+    @Operation(summary = "Supprime une photo du cabinet (photoId figure dans la fiche du lieu)")
+    public void removePhoto(@PathVariable String locationId, @PathVariable String photoId) {
+        locationUseCase.removePhoto(locationId, photoId);
+    }
+
+    @PostMapping("/{locationId}/main")
+    @PreAuthorize("hasAuthority('profile.location.write')")
+    @Operation(summary = "Designe ce lieu comme lieu principal (l'ancien perd ce statut)")
+    public ProfileViews.PracticeLocationView promoteToMain(@PathVariable String locationId) {
+        return locationUseCase.promoteToMain(locationId);
     }
 }

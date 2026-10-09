@@ -16,10 +16,13 @@ public interface PractitionerDossierJpaRepository extends JpaRepository<Practiti
 
     void deleteByUserId(Long userId);
 
+    /** Fiches publiables seulement (regle PractitionerDossier.isPublishable). */
     @Query("""
             select d from PractitionerDossierEntity d
             where (:specialty is null or lower(d.mainSpecialty) = lower(:specialty))
               and (:teleconsultationOnly = false or d.teleconsultation = true)
+              and d.mainSpecialty is not null and trim(d.mainSpecialty) <> ''
+              and d.sector is not null
               and (:term is null
                    or lower(d.firstName) like lower(concat('%', :term, '%'))
                    or lower(d.lastName) like lower(concat('%', :term, '%'))
@@ -35,6 +38,8 @@ public interface PractitionerDossierJpaRepository extends JpaRepository<Practiti
             select count(d) from PractitionerDossierEntity d
             where (:specialty is null or lower(d.mainSpecialty) = lower(:specialty))
               and (:teleconsultationOnly = false or d.teleconsultation = true)
+              and d.mainSpecialty is not null and trim(d.mainSpecialty) <> ''
+              and d.sector is not null
               and (:term is null
                    or lower(d.firstName) like lower(concat('%', :term, '%'))
                    or lower(d.lastName) like lower(concat('%', :term, '%'))

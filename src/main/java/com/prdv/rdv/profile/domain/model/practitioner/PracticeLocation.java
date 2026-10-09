@@ -2,9 +2,11 @@ package com.prdv.rdv.profile.domain.model.practitioner;
 
 import com.prdv.rdv.profile.domain.exception.ProfileErrorCode;
 import com.prdv.rdv.profile.domain.exception.ProfileException;
+import com.prdv.rdv.profile.domain.model.common.ContactFormats;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Instant;
@@ -13,9 +15,11 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Agregat « Lieu d'exercice » (module 2.2 — Informations Cabinet).
@@ -76,9 +80,20 @@ public class PracticeLocation {
                         "Le type de photo est obligatoire");
             }
         }
+
+        /**
+         * Identifiant stable et opaque de la photo, derive de sa cle de stockage
+         * (UUID de type 3) : il survit au rechargement et ne contient aucun
+         * separateur de chemin, il peut donc figurer dans une URL.
+         */
+        public String photoId() {
+            return UUID.nameUUIDFromBytes(storageKey.getBytes(StandardCharsets.UTF_8)).toString();
+        }
     }
 
     private static final int MAX_PHOTOS = 20;
+    private static final int MAX_SOCIAL_LINKS = 10;
+    private static final Pattern SOCIAL_PLATFORM = Pattern.compile("^[a-z0-9_-]{2,30}$");
 
     private String id;
     private Long practitionerUserId;
@@ -144,11 +159,16 @@ public class PracticeLocation {
     // Comportements
     // ------------------------------------------------------------------
 
+    /** Geolocalisation : latitude et longitude sont fournies ensemble, bornees, et jamais NaN. */
     public void geolocate(Double newLatitude, Double newLongitude, Clock clock) {
-        if (newLatitude != null && (newLatitude < -90 || newLatitude > 90)) {
+        if ((newLatitude == null) != (newLongitude == null)) {
+            throw ProfileException.of(ProfileErrorCode.LOCATION_INVALID,
+                    "La latitude et la longitude doivent etre renseignees ensemble");
+        }
+        if (newLatitude != null && !(newLatitude >= -90 && newLatitude <= 90)) {
             throw ProfileException.of(ProfileErrorCode.LOCATION_INVALID, "Latitude invalide : " + newLatitude);
         }
-        if (newLongitude != null && (newLongitude < -180 || newLongitude > 180)) {
+        if (newLongitude != null && !(newLongitude >= -180 && newLongitude <= 180)) {
             throw ProfileException.of(ProfileErrorCode.LOCATION_INVALID, "Longitude invalide : " + newLongitude);
         }
         this.latitude = newLatitude;
@@ -156,14 +176,26 @@ public class PracticeLocation {
         touch(clock);
     }
 
+    /** Coordonnees professionnelles : chaque valeur renseignee doit avoir un format valide. */
     public void updateCoordinates(String newPhone, String newMobilePhone, String newFax, String newEmail,
                                   String newWebsite, String newVirtualTourUrl, Clock clock) {
-        this.phone = newPhone;
-        this.mobilePhone = newMobilePhone;
-        this.fax = newFax;
-        this.email = newEmail;
-        this.website = newWebsite;
-        this.virtualTourUrl = newVirtualTourUrl;
+        String checkedPhone = ContactFormats.phone(newPhone, ProfileErrorCode.LOCATION_INVALID,
+                "Telephone fixe");
+        String checkedMobile = ContactFormats.phone(newMobilePhone, ProfileErrorCode.LOCATION_INVALID,
+                "Telephone mobile");
+        String checkedFax = ContactFormats.phone(newFax, ProfileErrorCode.LOCATION_INVALID, "Fax");
+        String checkedEmail = ContactFormats.email(newEmail, ProfileErrorCode.LOCATION_INVALID,
+                "Email professionnel");
+        String checkedWebsite = ContactFormats.httpUrl(newWebsite, ProfileErrorCode.LOCATION_INVALID,
+                "Site web");
+        String checkedTour = ContactFormats.httpUrl(newVirtualTourUrl, ProfileErrorCode.LOCATION_INVALID,
+                "Visite virtuelle 360");
+        this.phone = checkedPhone;
+        this.mobilePhone = checkedMobile;
+        this.fax = checkedFax;
+        this.email = checkedEmail;
+        this.website = checkedWebsite;
+        this.virtualTourUrl = checkedTour;
         touch(clock);
     }
 
@@ -210,26 +242,67 @@ public class PracticeLocation {
         return photo;
     }
 
-    public void removePhoto(String storageKey, Clock clock) {
-        boolean removed = this.photos.removeIf(photo -> photo.storageKey().equals(storageKey));
-        if (!removed) {
-            throw ProfileException.of(ProfileErrorCode.LOCATION_INVALID,
-                    "Aucune photo ne correspond a la cle " + storageKey);
+    public Optional<Photo> findPhoto(String photoId) {
+        return photos.stream().filter(photo -> photo.photoId().equals(photoId)).findFirst();
+    }
+
+    /** Retire la photo identifiee et la renvoie, pour supprimer son fichier apres sauvegarde. */
+    public Photo removePhotoById(String photoId, Clock clock) {
+        Photo target = findPhoto(photoId)
+                .orElseThrow(() -> ProfileException.of(ProfileErrorCode.LOCATION_INVALID,
+                        "Aucune photo ne correspond a l'identifiant " + photoId));
+        this.photos.remove(target);
+        touch(clock);
+        return target;
+    }
+
+    /** Cles de stockage des photos : a supprimer lors de l'effacement du lieu ou du compte. */
+    public List<String> mediaStorageKeys() {
+        return photos.stream().map(Photo::storageKey).toList();
+    }
+
+    /**
+     * Remplace l'ensemble des reseaux sociaux du lieu. Une carte vide retire
+     * tous les liens ; un lien se retire en l'omettant de la carte envoyee.
+     */
+    public void replaceSocialLinks(Map<String, String> links, Clock clock) {
+        Map<String, String> cleaned = new LinkedHashMap<>();
+        if (links != null) {
+            for (Map.Entry<String, String> entry : links.entrySet()) {
+                String platform = entry.getKey() == null
+                        ? "" : entry.getKey().trim().toLowerCase(Locale.ROOT);
+                if (platform.isEmpty() && (entry.getValue() == null || entry.getValue().isBlank())) {
+                    continue;
+                }
+                if (!SOCIAL_PLATFORM.matcher(platform).matches()) {
+                    throw ProfileException.of(ProfileErrorCode.LOCATION_INVALID,
+                            "Plateforme de reseau social invalide : " + entry.getKey());
+                }
+                String url = ContactFormats.httpUrl(entry.getValue(), ProfileErrorCode.LOCATION_INVALID,
+                        "Lien " + platform);
+                if (url == null) {
+                    throw ProfileException.of(ProfileErrorCode.LOCATION_INVALID,
+                            "Un lien de reseau social exige une URL : " + platform);
+                }
+                cleaned.put(platform, url);
+            }
         }
+        if (cleaned.size() > MAX_SOCIAL_LINKS) {
+            throw ProfileException.of(ProfileErrorCode.LOCATION_INVALID,
+                    "Trop de reseaux sociaux (maximum " + MAX_SOCIAL_LINKS + ")");
+        }
+        this.socialLinks = cleaned;
         touch(clock);
     }
 
-    public void addSocialLink(String platform, String url, Clock clock) {
-        if (platform == null || platform.isBlank() || url == null || url.isBlank()) {
-            throw ProfileException.of(ProfileErrorCode.LOCATION_INVALID,
-                    "Un lien de reseau social exige une plateforme et une URL");
-        }
-        this.socialLinks.put(platform.trim().toLowerCase(java.util.Locale.ROOT), url.trim());
-        touch(clock);
-    }
-
+    /** Ce lieu devient le lieu principal (le retrait des autres lieux est du ressort du service). */
     public void promoteToMain(Clock clock) {
         this.mainLocation = true;
+        touch(clock);
+    }
+
+    public void demoteFromMain(Clock clock) {
+        this.mainLocation = false;
         touch(clock);
     }
 
