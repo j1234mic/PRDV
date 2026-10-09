@@ -43,6 +43,15 @@ public class ProfileAccessGuard {
                 .orElseGet(() -> preferencesRepository.save(PrivacyPreferences.defaults(userId, clock)));
     }
 
+    /**
+     * Preferences du patient sans effet de bord : utilisees par les lectures
+     * (export, consultation) qui ne doivent jamais inserer de donnees.
+     */
+    public PrivacyPreferences preferencesOrDefaults(Long userId) {
+        return preferencesRepository.findByUserId(userId)
+                .orElseGet(() -> PrivacyPreferences.defaults(userId, clock));
+    }
+
     public Long requireCurrentUser() {
         return currentUser.requireCurrentUserId();
     }

@@ -239,7 +239,7 @@ public class PatientIdentity {
         }
 
         public boolean isComplementary() {
-            return type != InsuranceType.PRINCIPAL;
+            return type == InsuranceType.COMPLEMENTARY;
         }
     }
 
@@ -320,6 +320,8 @@ public class PatientIdentity {
     private VitaleCard vitaleCard;
     private HealthInsurance primaryInsurance;
     private HealthInsurance complementaryInsurance;
+    /** Autres couvertures (CMU-C, AME, couverture privee ou etrangere) : une par type. */
+    private List<HealthInsurance> otherInsurances = new ArrayList<>();
     private DmpAccount dmpAccount = DmpAccount.notLinked();
 
     private Instant createdAt;
@@ -364,9 +366,10 @@ public class PatientIdentity {
             throw ProfileException.of(ProfileErrorCode.VALIDATION_ERROR,
                     "Trop de contacts (maximum " + MAX_CONTACTS + ")");
         }
+        Set<ContactPoint> previousContacts = this.contacts;
         Set<ContactPoint> normalized = new LinkedHashSet<>();
         for (ContactPoint contact : newContacts) {
-            ContactPoint candidate = contact;
+            ContactPoint candidate = carryVerification(contact, previousContacts);
             for (ContactPoint existing : normalized) {
                 if (existing.type() == candidate.type() && existing.value().equals(candidate.value())) {
                     throw ProfileException.of(ProfileErrorCode.VALIDATION_ERROR,
@@ -383,6 +386,19 @@ public class PatientIdentity {
         }
         this.contacts = normalized;
         touch(clock);
+    }
+
+    /**
+     * Le drapeau « verifie » n'est jamais declare par le client : un contact deja
+     * verifie (meme type, meme valeur) reste verifie, tout autre contact ne l'est pas.
+     */
+    private static ContactPoint carryVerification(ContactPoint incoming, Set<ContactPoint> previous) {
+        boolean alreadyVerified = previous.stream().anyMatch(existing -> existing.verified()
+                && existing.type() == incoming.type() && existing.value().equals(incoming.value()));
+        if (alreadyVerified == incoming.verified()) {
+            return incoming;
+        }
+        return new ContactPoint(incoming.type(), incoming.value(), alreadyVerified, incoming.preferred());
     }
 
     public Optional<ContactPoint> preferredContact(ContactType type) {
@@ -472,12 +488,27 @@ public class PatientIdentity {
         if (insurance == null) {
             throw ProfileException.of(ProfileErrorCode.VALIDATION_ERROR, "La couverture est obligatoire");
         }
-        if (insurance.type() == InsuranceType.PRINCIPAL) {
-            this.primaryInsurance = insurance;
-        } else {
-            this.complementaryInsurance = insurance;
+        switch (insurance.type()) {
+            case PRINCIPAL -> this.primaryInsurance = insurance;
+            case COMPLEMENTARY -> this.complementaryInsurance = insurance;
+            default -> this.otherInsurances = withCoverage(otherInsurances, insurance);
         }
         touch(clock);
+    }
+
+    /** Remplace la couverture de meme type ; les autres couvertures sont conservees. */
+    private static List<HealthInsurance> withCoverage(List<HealthInsurance> current,
+                                                      HealthInsurance insurance) {
+        List<HealthInsurance> updated = new ArrayList<>();
+        if (current != null) {
+            for (HealthInsurance existing : current) {
+                if (existing.type() != insurance.type()) {
+                    updated.add(existing);
+                }
+            }
+        }
+        updated.add(insurance);
+        return updated;
     }
 
     // ------------------------------------------------------------------
@@ -516,6 +547,23 @@ public class PatientIdentity {
     // RGPD
     // ------------------------------------------------------------------
 
+    /** Cles des fichiers d'identite (photo, piece d'identite, scan Vitale) : a supprimer lors de l'effacement. */
+    public List<String> mediaStorageKeys() {
+        List<String> keys = new ArrayList<>();
+        addKey(keys, photoStorageKey);
+        addKey(keys, identityDocumentStorageKey);
+        if (vitaleCard != null) {
+            addKey(keys, vitaleCard.scanStorageKey());
+        }
+        return List.copyOf(keys);
+    }
+
+    private static void addKey(List<String> keys, String key) {
+        if (key != null && !key.isBlank()) {
+            keys.add(key);
+        }
+    }
+
     /** Efface les donnees personnelles du profil (droit a l'oubli). */
     public void erase(Clock clock) {
         this.civilStatus = new CivilStatus(null, "ANONYMISE", null, "ANONYMISE", null, null,
@@ -532,6 +580,7 @@ public class PatientIdentity {
         this.vitaleCard = null;
         this.primaryInsurance = null;
         this.complementaryInsurance = null;
+        this.otherInsurances = new ArrayList<>();
         this.dmpAccount = DmpAccount.notLinked();
         touch(clock);
     }

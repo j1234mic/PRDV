@@ -134,6 +134,9 @@ prdv:
     storage:
       # Racine du stockage des documents et medias du module 2 (distincte du KYC)
       local-path: ${PROFILE_STORAGE_PATH:./storage/profile}
+      # Cle de chiffrement AES-256-GCM des fichiers medicaux au repos (PBKDF2 derive la cle).
+      # En production, fournir PRDV_PROFILE_STORAGE_KEY ; la valeur par defaut est reservee au developpement.
+      encryption-key: ${PRDV_PROFILE_STORAGE_KEY:${CIPHER_SECRET:dev-cipher-secret-change-me-0123456789}}
 
 springdoc:
   swagger-ui:

@@ -1,6 +1,8 @@
 package com.prdv.rdv.profile.application.service.support;
 
 import com.prdv.rdv.profile.application.port.output.ConnectedDeviceRepository;
+import com.prdv.rdv.profile.application.port.output.HealthAlertRepository;
+import com.prdv.rdv.profile.application.port.output.HealthMetricRepository;
 import com.prdv.rdv.profile.application.port.output.MedicalDocumentRepository;
 import com.prdv.rdv.profile.application.port.output.MedicalRecordRepository;
 import com.prdv.rdv.profile.application.port.output.PatientIdentityRepository;
@@ -11,8 +13,10 @@ import com.prdv.rdv.profile.application.port.output.PrivacyPreferencesRepository
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -27,10 +31,17 @@ import java.util.Map;
 @Component
 public class ProfileDataAssembler {
 
+    /** Borne haute de la fenetre d'export des mesures (toutes les mesures existantes). */
+    private static final Instant EXPORT_FAR_FUTURE = Instant.parse("9999-12-31T23:59:59Z");
+    /** Plafond de mesures exportees : au-dela, l'export reste borne et le volume complet passe par l'API. */
+    static final int MAX_EXPORTED_METRICS = 50_000;
+
     private final PatientIdentityRepository identityRepository;
     private final MedicalRecordRepository recordRepository;
     private final MedicalDocumentRepository documentRepository;
     private final ConnectedDeviceRepository deviceRepository;
+    private final HealthMetricRepository metricRepository;
+    private final HealthAlertRepository alertRepository;
     private final PrivacyPreferencesRepository preferencesRepository;
     private final PractitionerDossierRepository dossierRepository;
     private final PracticeLocationRepository locationRepository;
@@ -43,6 +54,8 @@ public class ProfileDataAssembler {
                                 MedicalRecordRepository recordRepository,
                                 MedicalDocumentRepository documentRepository,
                                 ConnectedDeviceRepository deviceRepository,
+                                HealthMetricRepository metricRepository,
+                                HealthAlertRepository alertRepository,
                                 PrivacyPreferencesRepository preferencesRepository,
                                 PractitionerDossierRepository dossierRepository,
                                 PracticeLocationRepository locationRepository,
@@ -54,6 +67,8 @@ public class ProfileDataAssembler {
         this.recordRepository = recordRepository;
         this.documentRepository = documentRepository;
         this.deviceRepository = deviceRepository;
+        this.metricRepository = metricRepository;
+        this.alertRepository = alertRepository;
         this.preferencesRepository = preferencesRepository;
         this.dossierRepository = dossierRepository;
         this.locationRepository = locationRepository;
@@ -77,8 +92,14 @@ public class ProfileDataAssembler {
                 .map(viewMapper::documentView).toList());
         data.put("connectedDevices", deviceRepository.findByUserId(userId).stream()
                 .map(viewMapper::deviceView).toList());
+        data.put("healthMetrics", metricRepository
+                .find(userId, null, Instant.EPOCH, EXPORT_FAR_FUTURE, MAX_EXPORTED_METRICS).stream()
+                .map(viewMapper::metricView).toList());
+        data.put("healthAlerts", alertRepository.findByUserId(userId, false).stream()
+                .map(viewMapper::alertView).toList());
+        // Lecture sans effet de bord : l'export ne doit jamais inserer de preferences.
         data.put("privacyAndConsents",
-                viewMapper.preferencesView(accessGuard.preferencesOf(userId)));
+                viewMapper.preferencesView(accessGuard.preferencesOrDefaults(userId)));
 
         LocalDateTime now = LocalDateTime.now(clock);
         data.put("practiceLocations", locationRepository.findByPractitionerUserId(userId).stream()
@@ -86,7 +107,7 @@ public class ProfileDataAssembler {
         data.put("ratingsGivenAndReceived", ratingRepository.findByPractitionerUserId(userId).stream()
                 .map(viewMapper::ratingView).toList());
         dossierRepository.findByUserId(userId).ifPresent(dossier -> data.put("professionalProfile",
-                viewMapper.dossierView(dossier, null, java.util.List.of(), java.util.List.of())));
+                viewMapper.dossierView(dossier, null, List.of(), List.of())));
         return data;
     }
 }

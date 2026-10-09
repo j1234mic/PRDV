@@ -9,8 +9,6 @@ import com.prdv.rdv.profile.domain.model.document.MedicalDocument;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -28,7 +26,6 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -81,16 +78,14 @@ public class MedicalDocumentController {
     @PreAuthorize("hasAuthority('profile.document.read')")
     @Operation(summary = "Telechargement : le droit de lecture est verifie avant l'envoi des octets")
     public ResponseEntity<byte[]> download(@PathVariable Long documentId) {
-        ProfileViews.DocumentFile file = queryUseCase.download(documentId);
-        ContentDisposition disposition = ContentDisposition.attachment()
-                .filename(file.filename(), StandardCharsets.UTF_8)
-                .build();
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .contentType(MediaType.parseMediaType(file.contentType() == null
-                        ? MediaType.APPLICATION_OCTET_STREAM_VALUE : file.contentType()))
-                .contentLength(file.sizeBytes())
-                .body(file.content());
+        return FileResponses.of(queryUseCase.download(documentId), true);
+    }
+
+    @GetMapping("/{documentId}/versions/{version}/download")
+    @PreAuthorize("hasAuthority('profile.document.read')")
+    @Operation(summary = "Telechargement d'une version precise de l'historique (1 = depot initial)")
+    public ResponseEntity<byte[]> downloadVersion(@PathVariable Long documentId, @PathVariable int version) {
+        return FileResponses.of(queryUseCase.downloadVersion(documentId, version), true);
     }
 
     // ------------------------------------------------------------------

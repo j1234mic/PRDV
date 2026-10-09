@@ -237,6 +237,15 @@ public class MedicalDocument {
         return versions.get(versions.size() - 1);
     }
 
+    /** Version numerotee (1 = depot initial) : base du telechargement de l'historique. */
+    public DocumentVersion versionNumbered(int number) {
+        if (number < 1 || number > versions.size()) {
+            throw ProfileException.of(ProfileErrorCode.DOCUMENT_NOT_FOUND,
+                    "Version " + number + " introuvable (le document en compte " + versions.size() + ")");
+        }
+        return versions.get(number - 1);
+    }
+
     public int currentVersionNumber() {
         return versions.isEmpty() ? 0 : versions.size();
     }

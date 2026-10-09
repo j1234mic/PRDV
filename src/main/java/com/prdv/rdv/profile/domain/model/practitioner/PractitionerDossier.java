@@ -383,6 +383,22 @@ public class PractitionerDossier {
                 && practiceInformation.sector() != null;
     }
 
+    /** Cles des fichiers multimedias publics (photo, video) : a supprimer lors de l'effacement. */
+    public List<String> mediaStorageKeys() {
+        List<String> keys = new ArrayList<>();
+        if (identity != null) {
+            addIfPresent(keys, identity.photoStorageKey());
+            addIfPresent(keys, identity.presentationVideoKey());
+        }
+        return List.copyOf(keys);
+    }
+
+    private static void addIfPresent(List<String> keys, String key) {
+        if (key != null && !key.isBlank()) {
+            keys.add(key);
+        }
+    }
+
     /** Efface les donnees personnelles du dossier (droit a l'oubli). */
     public void erase(Clock clock) {
         this.identity = null;

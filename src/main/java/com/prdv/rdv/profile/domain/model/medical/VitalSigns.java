@@ -2,9 +2,12 @@ package com.prdv.rdv.profile.domain.model.medical;
 
 import com.prdv.rdv.profile.domain.exception.ProfileErrorCode;
 import com.prdv.rdv.profile.domain.exception.ProfileException;
+import com.prdv.rdv.profile.domain.model.health.HealthMetric;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Value Object : constantes vitales relevees a un instant donne.
@@ -42,6 +45,44 @@ public record VitalSigns(Integer systolicMmHg,
             throw ProfileException.of(ProfileErrorCode.VALIDATION_ERROR,
                     "La date de releve des constantes est obligatoire");
         }
+    }
+
+    /**
+     * Mesures de la serie temporelle equivalentes a ces constantes. Chaque valeur
+     * devient une {@link HealthMetric} horodatee au releve : graphiques, alertes
+     * automatiques et historique voient ainsi les saisies manuelles comme les
+     * mesures d'appareils. Une valeur hors plage plausible de la serie est omise.
+     */
+    public List<HealthMetric> toHealthMetrics(Long userId, String sourceLabel) {
+        List<HealthMetric> metrics = new ArrayList<>();
+        addMetric(metrics, userId, HealthMetric.MetricType.SYSTOLIC_BLOOD_PRESSURE,
+                decimal(systolicMmHg), sourceLabel);
+        addMetric(metrics, userId, HealthMetric.MetricType.DIASTOLIC_BLOOD_PRESSURE,
+                decimal(diastolicMmHg), sourceLabel);
+        addMetric(metrics, userId, HealthMetric.MetricType.HEART_RATE, decimal(heartRateBpm), sourceLabel);
+        addMetric(metrics, userId, HealthMetric.MetricType.BODY_TEMPERATURE, temperatureCelsius, sourceLabel);
+        addMetric(metrics, userId, HealthMetric.MetricType.BLOOD_OXYGEN_SATURATION,
+                decimal(oxygenSaturationPercent), sourceLabel);
+        addMetric(metrics, userId, HealthMetric.MetricType.RESPIRATORY_RATE,
+                decimal(respiratoryRatePerMin), sourceLabel);
+        if (bodyMetrics != null) {
+            addMetric(metrics, userId, HealthMetric.MetricType.WEIGHT, bodyMetrics.weightKg(), sourceLabel);
+            addMetric(metrics, userId, HealthMetric.MetricType.BODY_MASS_INDEX, bodyMetrics.bmi(), sourceLabel);
+        }
+        return List.copyOf(metrics);
+    }
+
+    private void addMetric(List<HealthMetric> metrics, Long userId, HealthMetric.MetricType type,
+                           BigDecimal value, String sourceLabel) {
+        if (value == null || !type.isPlausible(value)) {
+            return;
+        }
+        metrics.add(HealthMetric.of(userId, null, type, value, HealthMetric.MeasurementContext.UNSPECIFIED,
+                measuredAt, sourceLabel));
+    }
+
+    private static BigDecimal decimal(Integer value) {
+        return value == null ? null : BigDecimal.valueOf(value.longValue());
     }
 
     /** Hypertension arterielle de grade 2 (>= 160/100 mmHg). */

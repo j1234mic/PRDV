@@ -77,6 +77,7 @@ public class ProfileViewMapper {
                         vitale.readAt()),
                 insuranceView(identity.getPrimaryInsurance()),
                 insuranceView(identity.getComplementaryInsurance()),
+                otherInsuranceViews(identity),
                 dmp == null ? null : new ProfileViews.DmpAccountView(dmp.dmpIdentifier(), dmp.linked(),
                         dmp.sharingEnabled(), dmp.linkedAt(), dmp.lastSyncAt()),
                 identity.getCreatedAt(),
@@ -110,6 +111,13 @@ public class ProfileViewMapper {
         return physician == null ? null : new ProfileViews.TreatingPhysicianView(physician.firstName(),
                 physician.lastName(), physician.rppsNumber(), physician.phone(), physician.email(),
                 physician.declaredToInsurance());
+    }
+
+    private List<ProfileViews.HealthInsuranceView> otherInsuranceViews(PatientIdentity identity) {
+        if (identity.getOtherInsurances() == null) {
+            return List.of();
+        }
+        return identity.getOtherInsurances().stream().map(this::insuranceView).toList();
     }
 
     private ProfileViews.HealthInsuranceView insuranceView(PatientIdentity.HealthInsurance insurance) {
@@ -444,8 +452,8 @@ public class ProfileViewMapper {
                                 slot.closesAt(), slot.closed(), slot.note()))
                         .toList(),
                 location.getPhotos().stream()
-                        .map(photo -> new ProfileViews.LocationPhotoView(photo.storageKey(), photo.type(),
-                                photo.caption()))
+                        .map(photo -> new ProfileViews.LocationPhotoView(photo.photoId(), photo.storageKey(),
+                                photo.type(), photo.caption()))
                         .toList(),
                 Map.copyOf(location.getSocialLinks()),
                 location.getVirtualTourUrl(), location.getPhone(), location.getMobilePhone(),

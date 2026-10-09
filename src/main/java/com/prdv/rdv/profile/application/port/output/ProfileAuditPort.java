@@ -18,6 +18,8 @@ public interface ProfileAuditPort {
         MEDICAL_RECORD_ACCESSED,
         MEDICAL_DOCUMENT_UPLOADED,
         MEDICAL_DOCUMENT_DOWNLOADED,
+        /** Consultation d'un fichier d'identite ou multimedia (photo, scan, video). */
+        MEDIA_DOWNLOADED,
         MEDICAL_DOCUMENT_SHARED,
         CONSENT_RECORDED,
         VISIBILITY_UPDATED,

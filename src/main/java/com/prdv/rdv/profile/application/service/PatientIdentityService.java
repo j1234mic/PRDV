@@ -13,10 +13,12 @@ import com.prdv.rdv.profile.application.port.output.ProfileAuditPort;
 import com.prdv.rdv.profile.application.port.output.ProfileEventPublisher;
 import com.prdv.rdv.profile.application.port.output.SensitiveDataProtector;
 import com.prdv.rdv.profile.application.result.ProfileViews;
+import com.prdv.rdv.profile.application.service.support.MediaContentTypes;
 import com.prdv.rdv.profile.application.service.support.MedicalFilePolicy;
 import com.prdv.rdv.profile.application.service.support.ProfileAccessGuard;
 import com.prdv.rdv.profile.application.service.support.ProfileAuditTrail;
 import com.prdv.rdv.profile.application.service.support.ProfileViewMapper;
+import com.prdv.rdv.profile.application.service.support.ReplacedFileCleaner;
 import com.prdv.rdv.profile.config.ProfileProperties;
 import com.prdv.rdv.profile.domain.event.ProfileEvent;
 import com.prdv.rdv.profile.domain.exception.ProfileErrorCode;
@@ -51,6 +53,7 @@ public class PatientIdentityService implements PatientIdentityUseCase {
     private final PatientIdentityRepository identityRepository;
     private final PatientBasicsPort patientBasics;
     private final MedicalFileStoragePort fileStorage;
+    private final ReplacedFileCleaner replacedFileCleaner;
     private final SensitiveDataProtector sensitiveData;
     private final DmpGatewayPort dmpGateway;
     private final CurrentUserPort currentUser;
@@ -76,7 +79,9 @@ public class PatientIdentityService implements PatientIdentityUseCase {
                                   ProfileAuditTrail auditTrail,
                                   ProfileEventPublisher eventPublisher,
                                   ProfileProperties properties,
+                                  ReplacedFileCleaner replacedFileCleaner,
                                   Clock clock) {
+        this.replacedFileCleaner = replacedFileCleaner;
         this.identityRepository = identityRepository;
         this.patientBasics = patientBasics;
         this.fileStorage = fileStorage;
@@ -100,14 +105,57 @@ public class PatientIdentityService implements PatientIdentityUseCase {
     @Override
     @Transactional(readOnly = true)
     public ProfileViews.PatientIdentityView myIdentity() {
-        return viewMapper.identityView(loadOrCreate(currentUser.requireCurrentUserId()));
+        return viewMapper.identityView(viewOrDefault(currentUser.requireCurrentUserId()));
     }
 
     @Override
     @Transactional(readOnly = true)
     public ProfileViews.PatientIdentityView identityOf(Long patientUserId) {
         accessGuard.requireAccess(patientUserId, PrivacyPreferences.DataCategory.IDENTITY);
-        return viewMapper.identityView(loadOrCreate(patientUserId));
+        return viewMapper.identityView(viewOrDefault(patientUserId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProfileViews.DocumentFile profilePhoto(Long patientUserId) {
+        Long requester = currentUser.requireCurrentUserId();
+        Long target = accessGuard.resolveTarget(patientUserId);
+        accessGuard.requireAccess(target, PrivacyPreferences.DataCategory.IDENTITY);
+        String key = identityRepository.findByUserId(target)
+                .map(PatientIdentity::getPhotoStorageKey)
+                .orElse(null);
+        return downloadMedia(key, requester, target, "photo de profil");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProfileViews.DocumentFile myProfilePhoto() {
+        Long userId = currentUser.requireCurrentUserId();
+        String key = identityRepository.findByUserId(userId)
+                .map(PatientIdentity::getPhotoStorageKey)
+                .orElse(null);
+        return downloadMedia(key, userId, userId, "photo de profil");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProfileViews.DocumentFile myIdentityDocument() {
+        Long userId = currentUser.requireCurrentUserId();
+        String key = identityRepository.findByUserId(userId)
+                .map(PatientIdentity::getIdentityDocumentStorageKey)
+                .orElse(null);
+        return downloadMedia(key, userId, userId, "piece d'identite");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProfileViews.DocumentFile myVitaleScan() {
+        Long userId = currentUser.requireCurrentUserId();
+        String key = identityRepository.findByUserId(userId)
+                .map(PatientIdentity::getVitaleCard)
+                .map(PatientIdentity.VitaleCard::scanStorageKey)
+                .orElse(null);
+        return downloadMedia(key, userId, userId, "scan de la carte Vitale");
     }
 
     // ------------------------------------------------------------------
@@ -212,8 +260,11 @@ public class PatientIdentityService implements PatientIdentityUseCase {
         MedicalFileStoragePort.StoredFile stored = fileStorage.store(
                 properties.getMedia().getPatientFolder() + "/" + userId + "/photo",
                 command.originalFilename(), command.contentType(), command.content());
+        String previousKey = identity.getPhotoStorageKey();
         identity.attachPhoto(stored.storageKey(), clock);
-        return saveAndAudit(identity, "photo de profil");
+        ProfileViews.PatientIdentityView view = saveAndAudit(identity, "photo de profil");
+        discardReplacedFile(previousKey, stored.storageKey());
+        return view;
     }
 
     @Override
@@ -226,9 +277,13 @@ public class PatientIdentityService implements PatientIdentityUseCase {
         MedicalFileStoragePort.StoredFile stored = fileStorage.store(
                 properties.getMedia().getPatientFolder() + "/" + userId + "/identity",
                 command.originalFilename(), command.contentType(), command.content());
+        String previousKey = identity.getIdentityDocumentStorageKey();
         identity.attachIdentityDocument(stored.storageKey(),
                 sensitiveData.tokenize(stored.storageKey(), NAMESPACE_IDENTITY_DOCUMENT), clock);
-        return saveAndAudit(identity, "piece d'identite stockee de facon securisee");
+        ProfileViews.PatientIdentityView view =
+                saveAndAudit(identity, "piece d'identite stockee de facon securisee");
+        discardReplacedFile(previousKey, stored.storageKey());
+        return view;
     }
 
     @Override
@@ -254,13 +309,17 @@ public class PatientIdentityService implements PatientIdentityUseCase {
                 ? null
                 : sensitiveData.tokenize(SocialSecurityNumber.of(command.nir()).value(), NAMESPACE_NIR);
 
+        String previousScan = identity.getVitaleCard() == null
+                ? null : identity.getVitaleCard().scanStorageKey();
         identity.registerVitaleCard(new PatientIdentity.VitaleCard(nirToken, command.cardVersion(),
                 command.issuedOn(), command.expiresOn(), readMode, scanKey, clock.instant()), clock);
         if (nirToken != null) {
             identity.registerSocialSecurityNumber(nirToken,
                     SocialSecurityNumber.of(command.nir()).masked(), clock);
         }
-        return saveAndAudit(identity, "carte Vitale enregistree (" + readMode + ")");
+        ProfileViews.PatientIdentityView view = saveAndAudit(identity, "carte Vitale enregistree (" + readMode + ")");
+        discardReplacedFile(previousScan, scanKey);
+        return view;
     }
 
     // ------------------------------------------------------------------
@@ -319,6 +378,29 @@ public class PatientIdentityService implements PatientIdentityUseCase {
     }
 
     // ------------------------------------------------------------------
+
+    /** Vue sans effet de bord : une identite absente est presentee par defaut, sans etre enregistree. */
+    private PatientIdentity viewOrDefault(Long userId) {
+        return identityRepository.findByUserId(userId)
+                .orElseGet(() -> PatientIdentity.create(userId, initialCivilStatus(userId), clock));
+    }
+
+    /** Lecture controlee d'un fichier d'identite ; le droit d'acces est verifie par l'appelant. */
+    private ProfileViews.DocumentFile downloadMedia(String storageKey, Long requester, Long owner, String label) {
+        if (storageKey == null || storageKey.isBlank()) {
+            throw ProfileException.of(ProfileErrorCode.DOCUMENT_NOT_FOUND, "Aucun fichier enregistre : " + label);
+        }
+        byte[] content = fileStorage.retrieve(storageKey);
+        auditTrail.success(ProfileAuditPort.ProfileAuditAction.MEDIA_DOWNLOADED, requester,
+                "PatientIdentity", String.valueOf(owner), label + " (" + content.length + " octets)");
+        return new ProfileViews.DocumentFile(MediaContentTypes.filenameOf(storageKey),
+                MediaContentTypes.contentTypeOf(storageKey), content.length, content);
+    }
+
+    /** Supprime le fichier remplace une fois la transaction validee (au mieux). */
+    private void discardReplacedFile(String previousKey, String currentKey) {
+        replacedFileCleaner.discardReplaced(previousKey, currentKey);
+    }
 
     /** Charge l'identite, ou l'amorce a partir des elements connus du contexte IAM. */
     private PatientIdentity loadOrCreate(Long userId) {

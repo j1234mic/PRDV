@@ -9,7 +9,6 @@ import com.prdv.rdv.profile.application.port.output.DataExportPort;
 import com.prdv.rdv.profile.application.port.output.HealthAlertRepository;
 import com.prdv.rdv.profile.application.port.output.HealthMetricRepository;
 import com.prdv.rdv.profile.application.port.output.MedicalDocumentRepository;
-import com.prdv.rdv.profile.application.port.output.MedicalFileStoragePort;
 import com.prdv.rdv.profile.application.port.output.MedicalRecordRepository;
 import com.prdv.rdv.profile.application.port.output.PatientIdentityRepository;
 import com.prdv.rdv.profile.application.port.output.PracticeLocationRepository;
@@ -21,26 +20,27 @@ import com.prdv.rdv.profile.application.port.output.ProfileEventPublisher;
 import com.prdv.rdv.profile.application.result.ProfileViews;
 import com.prdv.rdv.profile.application.service.support.ProfileAuditTrail;
 import com.prdv.rdv.profile.application.service.support.ProfileDataAssembler;
+import com.prdv.rdv.profile.application.service.support.ReplacedFileCleaner;
 import com.prdv.rdv.profile.domain.event.ProfileEvent;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
  * Cas d'usage : portabilite et effacement des donnees (RGPD art. 20 et 17).
  *
  * <p>L'export est genere dans un format lisible par machine ; l'effacement
- * purge les fichiers stockes, les mesures de sante, les documents et les
- * consentements, puis delegue l'anonymisation du compte au contexte IAM.
+ * purge les fichiers stockes (identite, carte Vitale, documents, photos et
+ * videos professionnelles, photos de cabinet), les mesures de sante, les
+ * documents et les consentements, puis delegue l'anonymisation du compte au
+ * contexte IAM.
  */
 @Service
 public class DataPortabilityService implements DataPortabilityUseCase {
-
-    private static final Logger log = LoggerFactory.getLogger(DataPortabilityService.class);
 
     private final ProfileDataAssembler dataAssembler;
     private final DataExportPort dataExport;
@@ -48,7 +48,7 @@ public class DataPortabilityService implements DataPortabilityUseCase {
     private final PatientIdentityRepository identityRepository;
     private final MedicalRecordRepository recordRepository;
     private final MedicalDocumentRepository documentRepository;
-    private final MedicalFileStoragePort fileStorage;
+    private final ReplacedFileCleaner replacedFileCleaner;
     private final PrivacyPreferencesRepository preferencesRepository;
     private final ConnectedDeviceRepository deviceRepository;
     private final HealthMetricRepository metricRepository;
@@ -67,7 +67,7 @@ public class DataPortabilityService implements DataPortabilityUseCase {
                                   PatientIdentityRepository identityRepository,
                                   MedicalRecordRepository recordRepository,
                                   MedicalDocumentRepository documentRepository,
-                                  MedicalFileStoragePort fileStorage,
+                                  ReplacedFileCleaner replacedFileCleaner,
                                   PrivacyPreferencesRepository preferencesRepository,
                                   ConnectedDeviceRepository deviceRepository,
                                   HealthMetricRepository metricRepository,
@@ -85,7 +85,7 @@ public class DataPortabilityService implements DataPortabilityUseCase {
         this.identityRepository = identityRepository;
         this.recordRepository = recordRepository;
         this.documentRepository = documentRepository;
-        this.fileStorage = fileStorage;
+        this.replacedFileCleaner = replacedFileCleaner;
         this.preferencesRepository = preferencesRepository;
         this.deviceRepository = deviceRepository;
         this.metricRepository = metricRepository;
@@ -119,7 +119,12 @@ public class DataPortabilityService implements DataPortabilityUseCase {
     public void requestErasure(PrivacyCommands.RequestErasure command) {
         Long userId = currentUser.requireCurrentUserId();
 
+        // Les cles de fichiers sont recensees AVANT l'effacement des fiches (qui les reinitialise),
+        // puis les fichiers sont supprimes une fois la transaction validee.
+        List<String> storedFiles = new ArrayList<>();
+
         identityRepository.findByUserId(userId).ifPresent(identity -> {
+            storedFiles.addAll(identity.mediaStorageKeys());
             identity.erase(clock);
             identityRepository.save(identity);
         });
@@ -129,14 +134,7 @@ public class DataPortabilityService implements DataPortabilityUseCase {
         });
 
         documentRepository.findByOwnerUserId(userId).forEach(document -> document.getVersions()
-                .forEach(version -> {
-                    try {
-                        fileStorage.delete(version.storageKey());
-                    } catch (RuntimeException e) {
-                        log.warn("Fichier {} non supprime lors de l'effacement : {}",
-                                version.storageKey(), e.getMessage());
-                    }
-                }));
+                .forEach(version -> storedFiles.add(version.storageKey())));
         documentRepository.deleteByOwnerUserId(userId);
 
         deviceRepository.deleteByUserId(userId);
@@ -150,16 +148,22 @@ public class DataPortabilityService implements DataPortabilityUseCase {
         preferencesRepository.deleteByUserId(userId);
 
         dossierRepository.findByUserId(userId).ifPresent(dossier -> {
+            storedFiles.addAll(dossier.mediaStorageKeys());
             dossier.erase(clock);
             dossierRepository.save(dossier);
         });
+        locationRepository.findByPractitionerUserId(userId)
+                .forEach(location -> storedFiles.addAll(location.mediaStorageKeys()));
         locationRepository.deleteByPractitionerUserId(userId);
         ratingRepository.deleteByPatientUserId(userId);
+
+        replacedFileCleaner.discardAfterCommit(storedFiles);
 
         accountErasure.requestAccountAnonymization(userId);
 
         auditTrail.success(ProfileAuditPort.ProfileAuditAction.DATA_ERASURE_REQUESTED, userId,
-                "ProfileErasure", String.valueOf(userId), "donnees de profil effacees");
+                "ProfileErasure", String.valueOf(userId), "donnees de profil effacees ("
+                        + storedFiles.size() + " fichiers a supprimer)");
         eventPublisher.publish(new ProfileEvent.ProfileErasureRequested(userId, clock.instant()));
     }
 }
