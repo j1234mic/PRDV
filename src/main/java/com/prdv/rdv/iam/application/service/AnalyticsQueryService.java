@@ -7,6 +7,7 @@ import com.prdv.rdv.iam.application.port.output.UserRepository;
 import com.prdv.rdv.iam.application.result.Views;
 import com.prdv.rdv.iam.domain.model.user.AccountStatus;
 import com.prdv.rdv.iam.domain.model.user.PatientProfile;
+import com.prdv.rdv.iam.domain.model.user.ProfileType;
 import com.prdv.rdv.iam.domain.model.user.User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,7 +17,9 @@ import java.time.LocalDate;
 import java.time.Period;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Vue analytique sur des donnees anonymisees / pseudonymisees :
@@ -72,5 +75,34 @@ public class AnalyticsQueryService implements AnalyticsQueryUseCase {
                     kyc, ageMin, ageMax, accountAgeYears));
         }
         return result;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Views.AnalyticsSummary analyticsSummary() {
+        Map<ProfileType, Long> byProfileType = new EnumMap<>(ProfileType.class);
+        for (ProfileType profileType : ProfileType.values()) {
+            byProfileType.put(profileType, 0L);
+        }
+        Map<AccountStatus, Long> byStatus = new EnumMap<>(AccountStatus.class);
+        for (AccountStatus status : AccountStatus.values()) {
+            byStatus.put(status, 0L);
+        }
+
+        long totalUsers = 0;
+        int page = 0;
+        while (true) {
+            List<User> users = userRepository.findAll(page++, PAGE_SIZE);
+            for (User user : users) {
+                byProfileType.merge(user.getProfileType(), 1L, Long::sum);
+                byStatus.merge(user.getStatus(), 1L, Long::sum);
+            }
+            totalUsers += users.size();
+            if (users.size() < PAGE_SIZE) {
+                break;
+            }
+        }
+
+        return new Views.AnalyticsSummary(totalUsers, byProfileType, byStatus);
     }
 }
