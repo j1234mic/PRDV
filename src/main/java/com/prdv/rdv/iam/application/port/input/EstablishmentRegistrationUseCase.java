@@ -22,7 +22,7 @@ public interface EstablishmentRegistrationUseCase {
 
     Views.MembershipView reviewMembership(ProfileCommands.ReviewMembership command);
 
-    void revokeMembership(Long membershipId);
+    Views.MembershipView revokeMembership(Long membershipId);
 
     /** Gestion centralisee des services / departements de l'etablissement. */
     Views.EstablishmentView updateDepartments(ProfileCommands.UpdateDepartments command);

@@ -161,9 +161,9 @@ public class AuthController {
             HttpServletRequest httpRequest) {
         return socialAuthenticationUseCase.authenticateEnterpriseSso(
                 new AuthCommands.EnterpriseSsoLogin(
-                        request.provider(), request.tenantDomain(), request.externalSubject(),
+                        request.tenantDomain(), request.externalSubject(),
                         request.email(), request.firstName(), request.lastName(),
-                        request.targetProfileType(), request.establishmentUserId(),
+                        request.targetProfileType(),
                         httpRequestMetadata.from(httpRequest)));
     }
 

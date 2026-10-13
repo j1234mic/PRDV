@@ -151,7 +151,7 @@ public class EstablishmentRegistrationService implements EstablishmentRegistrati
 
     @Override
     @Transactional
-    public void revokeMembership(Long membershipId) {
+    public Views.MembershipView revokeMembership(Long membershipId) {
         Long establishmentId = securityContext.requireCurrentUserId();
         EstablishmentMembership membership = membershipRepository.findById(membershipId)
                 .orElseThrow(() -> IamException.of(IamErrorCode.NOT_FOUND, "Rattachement introuvable"));
@@ -159,9 +159,10 @@ public class EstablishmentRegistrationService implements EstablishmentRegistrati
             throw IamException.of(IamErrorCode.FORBIDDEN, "Rattachement qui ne concerne pas cet etablissement");
         }
         membership.revoke(clock);
-        membershipRepository.save(membership);
+        EstablishmentMembership saved = membershipRepository.save(membership);
         auditLogger.success(establishmentId, AuditLog.Action.PRACTITIONER_VALIDATED,
                 "rattachement revoque #" + membership.getId());
+        return viewMapper.membershipView(saved);
     }
 
     @Override
@@ -175,6 +176,18 @@ public class EstablishmentRegistrationService implements EstablishmentRegistrati
         auditLogger.success(userId, AuditLog.Action.ESTABLISHMENT_DEPARTMENTS_UPDATED,
                 "departements mis a jour : " + saved.getDepartments());
         return viewMapper.establishmentView(user, saved);
+    }
+
+    /** Convertit la commission saisie en pourcentage (0 a 100) en points de base ; {@code null} = defaut. */
+    private static long resolveFeeBasisPoints(Integer ratePercent) {
+        if (ratePercent == null) {
+            return DEFAULT_PLATFORM_FEE_BPS;
+        }
+        if (ratePercent < 0 || ratePercent > 100) {
+            throw IamException.of(IamErrorCode.VALIDATION_ERROR,
+                    "Le taux de commission doit etre compris entre 0 et 100 %");
+        }
+        return ratePercent * 100L;
     }
 
     @Override
@@ -197,6 +210,7 @@ public class EstablishmentRegistrationService implements EstablishmentRegistrati
                     .forEach(practitionerIds::add);
         }
 
+        long feeBasisPoints = resolveFeeBasisPoints(command.platformFeeRatePercent());
         String invoiceNumber = "INV-" + establishmentId + "-" + clock.instant().toEpochMilli();
         GroupInvoice invoice = GroupInvoice.issue(
                 establishmentId,
@@ -207,7 +221,7 @@ public class EstablishmentRegistrationService implements EstablishmentRegistrati
                 practitionerIds,
                 command.consultationsCount(),
                 command.totalAmountCents(),
-                DEFAULT_PLATFORM_FEE_BPS,
+                feeBasisPoints,
                 clock);
         GroupInvoice saved = groupInvoiceRepository.save(invoice);
         auditLogger.success(establishmentId, AuditLog.Action.GROUP_INVOICE_CREATED,

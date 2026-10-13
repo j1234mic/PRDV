@@ -316,6 +316,34 @@ public class PractitionerRegistrationService implements PractitionerRegistration
     }
 
     @Override
+    @Transactional
+    public Views.MembershipView designateReplacer(ProfileCommands.DesignateReplacer command) {
+        Long designatorId = securityContext.requireCurrentUserId();
+        requireProfile(designatorId);
+        EstablishmentMembership.validateValidityPeriod(command.validFrom(), command.validUntil());
+        User establishment = requireEstablishment(command.establishmentUserId());
+        boolean designatorIsActiveMember = membershipRepository.findByPractitionerUserId(designatorId).stream()
+                .anyMatch(m -> establishment.getId().equals(m.getEstablishmentUserId())
+                        && m.getStatus() == EstablishmentMembership.MembershipStatus.ACTIVE);
+        if (!designatorIsActiveMember) {
+            throw IamException.of(IamErrorCode.FORBIDDEN,
+                    "Seul un praticien rattache activement a cet etablissement peut designer un remplacant");
+        }
+        if (command.replacerPractitionerUserId() == null) {
+            throw IamException.of(IamErrorCode.VALIDATION_ERROR, "Le praticien remplacant est obligatoire");
+        }
+        requireProfile(command.replacerPractitionerUserId());
+        EstablishmentMembership membership = EstablishmentMembership.request(
+                establishment.getId(), command.replacerPractitionerUserId(),
+                EstablishmentMembership.MemberRole.REPLACER,
+                command.validFrom(), command.validUntil(), clock);
+        EstablishmentMembership saved = membershipRepository.save(membership);
+        auditLogger.success(designatorId, AuditLog.Action.PRACTITIONER_VALIDATED,
+                "remplacant #" + command.replacerPractitionerUserId() + " designe pour l'etablissement #" + establishment.getId());
+        return viewMapper.membershipView(saved);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<Views.MembershipView> myReplacements() {
         Long userId = securityContext.requireCurrentUserId();
@@ -326,7 +354,7 @@ public class PractitionerRegistrationService implements PractitionerRegistration
 
     @Override
     @Transactional
-    public void revokeReplacement(Long membershipId) {
+    public Views.MembershipView revokeReplacement(Long membershipId) {
         Long userId = securityContext.requireCurrentUserId();
         EstablishmentMembership membership = membershipRepository.findById(membershipId)
                 .orElseThrow(() -> IamException.of(IamErrorCode.NOT_FOUND, "Remplacement introuvable"));
@@ -334,7 +362,7 @@ public class PractitionerRegistrationService implements PractitionerRegistration
             throw IamException.of(IamErrorCode.FORBIDDEN, "Ce remplacement appartient a un autre praticien");
         }
         membership.revoke(clock);
-        membershipRepository.save(membership);
+        return viewMapper.membershipView(membershipRepository.save(membership));
     }
 
     @Override

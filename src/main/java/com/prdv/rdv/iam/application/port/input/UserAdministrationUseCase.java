@@ -13,6 +13,12 @@ public interface UserAdministrationUseCase {
 
     Views.UserView changeAccountStatus(AdminCommands.ChangeAccountStatus command);
 
+    /** Detail d'un compte utilisateur. */
+    Views.UserView getUser(Long userId);
+
+    /** Deverrouille un compte verrouille apres des tentatives de connexion echouees. */
+    Views.UserView unlockAccount(Long userId);
+
     /** Cree un compte administrateur systeme (SUPER_ADMIN, MODERATOR, TECHNICAL_SUPPORT, COMMERCIAL_SUPPORT, DATA_ANALYST). */
     Views.UserView createAdministrator(AdminCommands.CreateAdministrator command);
 

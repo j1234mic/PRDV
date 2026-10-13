@@ -64,6 +64,10 @@ public class IamProperties {
         @Getter
         @Setter
         public static class RateLimit {
+            /** Nombre maximal de requetes generales par minute et par IP. */
+            private int requestsPerMinute = 120;
+            /** Nombre maximal de requetes sur les endpoints d'authentification ({@code /api/v1/auth}, {@code /api/v1/register}) par minute et par IP. */
+            private int authRequestsPerMinute = 20;
             private int loginAttemptsPerMinute = 10;
             private int otpPerMinute = 5;
         }

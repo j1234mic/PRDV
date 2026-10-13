@@ -14,6 +14,9 @@ public interface RoleAdministrationUseCase {
 
     List<Views.PermissionView> listPermissions();
 
+    /** Permissions d'un module donne (ex. {@code iam}, {@code appointment}), insensible a la casse. */
+    List<Views.PermissionView> listPermissionsByModule(String module);
+
     void assignRoles(AdminCommands.AssignRoles command);
 
     Views.RoleView updateRole(AdminCommands.UpdateRole command);

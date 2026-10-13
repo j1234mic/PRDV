@@ -98,6 +98,26 @@ public class UserAdministrationService implements UserAdministrationUseCase {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Views.UserView getUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> IamException.of(IamErrorCode.NOT_FOUND, "Utilisateur introuvable"));
+        return viewMapper.userView(user);
+    }
+
+    @Override
+    @Transactional
+    public Views.UserView unlockAccount(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> IamException.of(IamErrorCode.NOT_FOUND, "Utilisateur introuvable"));
+        user.unlock(clock);
+        User saved = userRepository.save(user);
+        auditLogger.success(securityContext.currentUserId().orElse(null),
+                AuditLog.Action.ACCOUNT_ACTIVATED, "compte #" + userId + " deverrouille");
+        return viewMapper.userView(saved);
+    }
+
+    @Override
     @Transactional
     public Views.UserView createAdministrator(AdminCommands.CreateAdministrator command) {
         if (command.adminType() == null) {

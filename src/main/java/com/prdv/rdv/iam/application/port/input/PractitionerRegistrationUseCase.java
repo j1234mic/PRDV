@@ -35,9 +35,15 @@ public interface PractitionerRegistrationUseCase {
 
     Views.MembershipView declareReplacement(ProfileCommands.DeclareReplacement command);
 
+    /**
+     * Designe un autre praticien comme remplacant d'un etablissement ou le praticien connecte
+     * est rattache (demande en attente de validation par l'etablissement).
+     */
+    Views.MembershipView designateReplacer(ProfileCommands.DesignateReplacer command);
+
     List<Views.MembershipView> myReplacements();
 
-    void revokeReplacement(Long membershipId);
+    Views.MembershipView revokeReplacement(Long membershipId);
 
     List<Views.MembershipView> myMemberships();
 }

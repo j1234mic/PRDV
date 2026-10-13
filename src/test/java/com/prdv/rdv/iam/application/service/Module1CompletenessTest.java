@@ -22,6 +22,7 @@ import com.prdv.rdv.iam.application.port.output.MembershipRepository;
 import com.prdv.rdv.iam.application.port.output.PasswordHasher;
 import com.prdv.rdv.iam.application.port.output.PatientProfileRepository;
 import com.prdv.rdv.iam.application.port.output.PentestReportRepository;
+import com.prdv.rdv.iam.application.port.output.RefreshTokenRepository;
 import com.prdv.rdv.iam.application.port.output.RoleRepository;
 import com.prdv.rdv.iam.application.port.output.SecretaryProfileRepository;
 import com.prdv.rdv.iam.application.port.output.SecurityContextPort;
@@ -44,6 +45,7 @@ import com.prdv.rdv.iam.domain.model.security.PentestReport;
 import com.prdv.rdv.iam.domain.model.user.AccountStatus;
 import com.prdv.rdv.iam.domain.model.user.AdminType;
 import com.prdv.rdv.iam.domain.model.user.EstablishmentProfile;
+import com.prdv.rdv.iam.domain.model.user.Email;
 import com.prdv.rdv.iam.domain.model.user.PatientProfile;
 import com.prdv.rdv.iam.domain.model.user.ProfileType;
 import com.prdv.rdv.iam.domain.model.user.User;
@@ -105,6 +107,8 @@ class Module1CompletenessTest {
     @Mock
     private UserSessionRepository sessionRepository;
     @Mock
+    private RefreshTokenRepository refreshTokenRepository;
+    @Mock
     private EstablishmentProfileRepository establishmentProfileRepository;
     @Mock
     private MembershipRepository membershipRepository;
@@ -150,9 +154,8 @@ class Module1CompletenessTest {
 
         when(securityContext.requireCurrentUserId()).thenReturn(guardianId);
         when(userRepository.findById(guardianId)).thenReturn(Optional.of(guardian));
-        when(passwordHasher.hash(any())).thenReturn("$2a$hash");
-        when(roleRepository.findByName(Role.PATIENT))
-                .thenReturn(Optional.of(Role.system(Role.PATIENT, "Patient", Set.of())));
+        when(registrationSupport.createAccount(any(), any(), any(), any(), any())).thenAnswer(inv ->
+                User.register(Email.of(inv.getArgument(0)), null, "$2a$hash", ProfileType.PATIENT, FIXED_CLOCK));
         when(userRepository.save(any())).thenAnswer(inv -> {
             User u = inv.getArgument(0);
             u.setId(11L);
@@ -165,12 +168,11 @@ class Module1CompletenessTest {
         });
 
         PatientRegistrationService service = new PatientRegistrationService(
-                registrationSupport, patientProfileRepository, kycDocumentRepository,
-                tokenization, securityContext, userRepository, roleRepository,
-                passwordHasher, viewMapper, auditLogger, eventPublisher, FIXED_CLOCK);
+                registrationSupport, userRepository, patientProfileRepository, null,
+                securityContext, viewMapper, eventPublisher, FIXED_CLOCK);
 
         Views.PatientView minorView = service.registerMinor(new RegistrationCommands.RegisterMinorPatient(
-                "Leo", "Martin", LocalDate.of(2016, 4, 15), PatientProfile.Gender.MALE));
+                null, null, null, "Leo", "Martin", LocalDate.of(2016, 4, 15), PatientProfile.Gender.MALE));
 
         assertThat(minorView.minor()).isTrue();
         assertThat(minorView.guardianUserId()).isEqualTo(guardianId);
@@ -198,7 +200,10 @@ class Module1CompletenessTest {
                 "12 avenue de la Republique, Paris", List.of("Cardiologie", "Pediatrie"), FIXED_CLOCK);
         est.setId(1L);
 
+        User estUser = User.register(Email.of("clinique@prdv.app"), null, "$2a$hash", ProfileType.ESTABLISHMENT, FIXED_CLOCK);
+        estUser.setId(estUserId);
         when(securityContext.requireCurrentUserId()).thenReturn(estUserId);
+        when(userRepository.findById(estUserId)).thenReturn(Optional.of(estUser));
         when(establishmentProfileRepository.findByUserId(estUserId)).thenReturn(Optional.of(est));
         when(groupInvoiceRepository.save(any())).thenAnswer(inv -> {
             GroupInvoice gi = inv.getArgument(0);
@@ -209,7 +214,7 @@ class Module1CompletenessTest {
         });
 
         EstablishmentRegistrationService service = new EstablishmentRegistrationService(
-                registrationSupport, establishmentProfileRepository, membershipRepository,
+                registrationSupport, userRepository, establishmentProfileRepository, membershipRepository,
                 groupInvoiceRepository, secretaryProfileRepository, securityContext,
                 viewMapper, auditLogger, eventPublisher, FIXED_CLOCK);
 
@@ -224,7 +229,7 @@ class Module1CompletenessTest {
 
         EstablishmentMembership approvedMember = EstablishmentMembership.request(
                 estUserId, 30L, EstablishmentMembership.MemberRole.EMPLOYEE, null, null, FIXED_CLOCK);
-        approvedMember.approve(FIXED_CLOCK);
+        approvedMember.accept(FIXED_CLOCK);
         when(membershipRepository.findByEstablishmentUserId(estUserId)).thenReturn(List.of(approvedMember));
         when(secretaryProfileRepository.findByAccessibleEstablishmentId(estUserId)).thenReturn(List.of());
         when(groupInvoiceRepository.findByEstablishmentUserId(estUserId)).thenReturn(List.of());
@@ -253,7 +258,7 @@ class Module1CompletenessTest {
 
         UserAdministrationService service = new UserAdministrationService(
                 userRepository, roleRepository, passwordHasher, sessionRepository,
-                securityContext, viewMapper, auditLogger, eventPublisher, FIXED_CLOCK);
+                refreshTokenRepository, securityContext, viewMapper, auditLogger, FIXED_CLOCK);
 
         for (AdminType type : AdminType.values()) {
             Views.UserView created = service.createAdministrator(new AdminCommands.CreateAdministrator(
@@ -304,7 +309,8 @@ class Module1CompletenessTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(jwtTokenPort.createChallengeToken(userId, "BIOMETRIC")).thenReturn("bio-challenge-jwt");
         when(jwtTokenPort.parseChallengeToken("bio-challenge-jwt", "BIOMETRIC"))
-                .thenReturn(new JwtTokenPort.ChallengeClaims(userId, "BIOMETRIC"));
+                .thenReturn(new JwtTokenPort.ChallengeClaims(
+                        userId, "BIOMETRIC", FIXED_CLOCK.instant().plusSeconds(300)));
         when(tokenIssuanceSupport.completeLogin(any(), any(), any(Boolean.class)))
                 .thenReturn(AuthResults.TokenSet.bearer("access-jwt", "refresh-opaque", 900));
 
@@ -318,7 +324,7 @@ class Module1CompletenessTest {
 
         AuthResults.AuthResult result = bioService.authenticate(new AuthCommands.VerifyBiometric(
                 "bio-challenge-jwt", "cred-touchid-42", sigHex, 1L, RequestMetadata.unknown()));
-        assertThat(result.status()).isEqualTo(AuthResults.AuthResult.Status.AUTHENTICATED);
+        assertThat(result.isAuthenticated()).isTrue();
     }
 
     @Test
@@ -327,7 +333,6 @@ class Module1CompletenessTest {
         IamProperties props = new IamProperties();
         props.getSecurity().getJwt().setSecret("0123456789abcdef0123456789abcdef0123456789abcdef");
         props.getSecurity().getCipher().setSecret("master-aes-secret-2026-prdv");
-        props.getSecurity().getCipher().setSalt("prdv-salt-2026");
 
         AesGcmCipherAdapter cipher = new AesGcmCipherAdapter(props);
         WafDdosProtectionRegistry wafRegistry = new WafDdosProtectionRegistry(FIXED_CLOCK);
@@ -385,7 +390,7 @@ class Module1CompletenessTest {
                         "IDOR potentiel sur previsualisation documentaire",
                         "Description detaillee PoC...", "profile-documents",
                         BugBountyReport.Severity.HIGH, 7.5));
-        assertThat(bounty.status()).isEqualTo(BugBountyReport.Status.OPEN);
+        assertThat(bounty.status()).isEqualTo(BugBountyReport.Status.SUBMITTED);
 
         wafRegistry.blockIpTemporarily("203.0.113.99", Duration.ofMinutes(10));
         assertThat(securityService.wafDdosStatus().blockedIps()).contains("203.0.113.99");

@@ -71,9 +71,8 @@ public class PatientController {
     public PatientDtos.KycStatusResponse myKycStatus() {
         Views.PatientView profile = patientUseCase.currentProfile();
         List<Views.KycDocumentView> docs = patientUseCase.myDocuments();
-        boolean verified = docs.stream().anyMatch(d -> d.status() == KycDocument.Status.VERIFIED);
-        boolean paymentEligible = profile.kycLevel() == PatientProfile.KycLevel.IDENTITY_VERIFIED
-                || profile.kycLevel() == PatientProfile.KycLevel.PAYMENT_READY;
+        boolean verified = docs.stream().anyMatch(d -> d.status() == KycDocument.ReviewStatus.VERIFIED);
+        boolean paymentEligible = profile.kycLevel() == PatientProfile.KycLevel.VERIFIED;
         return new PatientDtos.KycStatusResponse(
                 profile.user().id(),
                 profile.kycLevel(),
@@ -89,6 +88,7 @@ public class PatientController {
             @Valid @RequestBody PatientDtos.RegisterMinorRequest request) {
         Views.PatientView minor = patientUseCase.registerMinor(
                 new RegistrationCommands.RegisterMinorPatient(
+                        null, null, null,
                         request.firstName(), request.lastName(), request.birthDate(), request.gender()));
         return ResponseEntity.status(HttpStatus.CREATED).body(minor);
     }
