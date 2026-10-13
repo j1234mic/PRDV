@@ -1,10 +1,13 @@
 package com.prdv.rdv.iam.domain.model.user;
 
+import com.prdv.rdv.iam.domain.exception.IamErrorCode;
+import com.prdv.rdv.iam.domain.exception.IamException;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 
 /**
  * Profil medecin / praticien.
@@ -35,6 +38,11 @@ public class PractitionerProfile {
     private boolean diplomaVerified;
     private boolean professionalInsuranceVerified;
     private boolean bankAccountVerified;
+
+    /** Assurance responsabilite civile professionnelle (RC Pro). */
+    private String insuranceCompany;
+    private String insurancePolicyNumber;
+    private LocalDate insuranceExpiresAt;
 
     /** Iban tokenise (jamais en clair) ; la verification RIB est decouplee. */
     private String ribToken;
@@ -71,5 +79,23 @@ public class PractitionerProfile {
     public void storeBankDetails(String ribToken, String maskedIban) {
         this.ribToken = ribToken;
         this.maskedIban = maskedIban;
+    }
+
+    /** Enregistre et valide l'assurance responsabilite civile professionnelle (RC Pro). */
+    public void recordVerifiedInsurance(String company, String policyNumber,
+                                        LocalDate expiresAt, Clock clock) {
+        if (company == null || company.isBlank() || policyNumber == null || policyNumber.isBlank()) {
+            throw IamException.of(IamErrorCode.VALIDATION_ERROR,
+                    "La compagnie d'assurance et le numero de police RC Pro sont obligatoires");
+        }
+        if (expiresAt != null && expiresAt.isBefore(LocalDate.now(clock))) {
+            throw IamException.of(IamErrorCode.VALIDATION_ERROR,
+                    "L'attestation d'assurance RC Pro est expiree (" + expiresAt + ")");
+        }
+        this.insuranceCompany = company.trim();
+        this.insurancePolicyNumber = policyNumber.trim();
+        this.insuranceExpiresAt = expiresAt;
+        this.professionalInsuranceVerified = true;
+        this.updatedAt = clock.instant();
     }
 }

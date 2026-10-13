@@ -157,6 +157,9 @@ public class UserPersistenceMapper {
         e.setDiplomaVerified(d.isDiplomaVerified());
         e.setProfessionalInsuranceVerified(d.isProfessionalInsuranceVerified());
         e.setBankAccountVerified(d.isBankAccountVerified());
+        e.setInsuranceCompany(d.getInsuranceCompany());
+        e.setInsurancePolicyNumber(d.getInsurancePolicyNumber());
+        e.setInsuranceExpiresAt(d.getInsuranceExpiresAt());
         e.setRibToken(d.getRibToken());
         e.setMaskedIban(d.getMaskedIban());
         e.setValidationNote(d.getValidationNote());
@@ -179,6 +182,9 @@ public class UserPersistenceMapper {
         d.setDiplomaVerified(e.isDiplomaVerified());
         d.setProfessionalInsuranceVerified(e.isProfessionalInsuranceVerified());
         d.setBankAccountVerified(e.isBankAccountVerified());
+        d.setInsuranceCompany(e.getInsuranceCompany());
+        d.setInsurancePolicyNumber(e.getInsurancePolicyNumber());
+        d.setInsuranceExpiresAt(e.getInsuranceExpiresAt());
         d.setRibToken(e.getRibToken());
         d.setMaskedIban(e.getMaskedIban());
         d.setValidationNote(e.getValidationNote());
@@ -193,8 +199,9 @@ public class UserPersistenceMapper {
         e.setFirstName(d.getFirstName());
         e.setLastName(d.getLastName());
         e.setSupervisedPractitionerIds(new HashSet<>(d.getSupervisedPractitionerIds()));
+        e.setAccessibleEstablishmentIds(new HashSet<>(d.getAccessibleEstablishmentIds()));
         e.setCreatedAt(d.getCreatedAt());
-        e.setUpdatedAt(e.getUpdatedAt());
+        e.setUpdatedAt(d.getUpdatedAt());
         return e;
     }
 
@@ -205,6 +212,7 @@ public class UserPersistenceMapper {
         d.setFirstName(e.getFirstName());
         d.setLastName(e.getLastName());
         d.setSupervisedPractitionerIds(new HashSet<>(e.getSupervisedPractitionerIds()));
+        d.setAccessibleEstablishmentIds(new HashSet<>(e.getAccessibleEstablishmentIds()));
         d.setCreatedAt(e.getCreatedAt());
         d.setUpdatedAt(e.getUpdatedAt());
         return d;

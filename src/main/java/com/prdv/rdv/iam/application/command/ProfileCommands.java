@@ -4,6 +4,8 @@ import com.prdv.rdv.iam.domain.model.verification.EstablishmentMembership;
 import com.prdv.rdv.iam.domain.model.verification.KycDocument;
 
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Commandes liees aux profils, documents KYC, contrats et rattachements.
@@ -42,5 +44,36 @@ public final class ProfileCommands {
     }
 
     public record ImportExternalProfile(String format, String rawContent, String sourcePlatform) {
+    }
+
+    /** Validation de l'assurance responsabilite civile professionnelle (RC Pro) du praticien. */
+    public record VerifyInsurance(String company, String policyNumber, LocalDate expiresAt) {
+    }
+
+    /** Mise a jour et verification du RIB/IBAN du praticien pour les paiements. */
+    public record UpdateBankAccount(String iban) {
+    }
+
+    /** Gestion des droits granulaires d'une secretaire medicale. */
+    public record UpdateSecretaryPermissions(Long secretaryUserId, Set<String> permissionCodes) {
+    }
+
+    /** Gestion des praticiens supervises et de l'acces multi-cabinets d'une secretaire. */
+    public record UpdateSecretaryAssignments(Long secretaryUserId,
+                                             Set<Long> supervisedPractitionerIds,
+                                             Set<Long> accessibleEstablishmentIds) {
+    }
+
+    /** Gestion des services / departements d'un etablissement de sante. */
+    public record UpdateDepartments(List<String> departments) {
+    }
+
+    /** Emission d'une facture groupee pour un etablissement multi-praticiens. */
+    public record IssueGroupInvoice(LocalDate periodStart,
+                                    LocalDate periodEnd,
+                                    String department,
+                                    Set<Long> practitionerUserIds,
+                                    int consultationsCount,
+                                    long totalAmountCents) {
     }
 }

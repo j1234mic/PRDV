@@ -6,6 +6,7 @@ import com.prdv.rdv.iam.application.port.output.ContractRepository;
 import com.prdv.rdv.iam.domain.model.verification.PractitionerContract;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -38,5 +39,12 @@ public class ContractPersistenceAdapter implements ContractRepository {
     @Override
     public boolean existsAcceptedByPractitionerUserId(Long practitionerUserId) {
         return contractJpa.existsByPractitionerUserId(practitionerUserId);
+    }
+
+    @Override
+    public List<PractitionerContract> findAllByPractitionerUserId(Long practitionerUserId) {
+        return contractJpa.findByPractitionerUserIdOrderByAcceptedAtDesc(practitionerUserId).stream()
+                .map(mapper::toDomain)
+                .toList();
     }
 }

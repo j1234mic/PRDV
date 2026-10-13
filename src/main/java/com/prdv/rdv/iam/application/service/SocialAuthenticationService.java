@@ -1,5 +1,6 @@
 package com.prdv.rdv.iam.application.service;
 
+import com.prdv.rdv.iam.application.command.AuthCommands;
 import com.prdv.rdv.iam.application.command.RequestMetadata;
 import com.prdv.rdv.iam.application.port.input.SocialAuthenticationUseCase;
 import com.prdv.rdv.iam.application.port.output.PatientProfileRepository;
@@ -15,6 +16,7 @@ import com.prdv.rdv.iam.domain.model.audit.AuditLog;
 import com.prdv.rdv.iam.domain.model.auth.SocialAccount;
 import com.prdv.rdv.iam.domain.model.rbac.Role;
 import com.prdv.rdv.iam.domain.model.user.AccountStatus;
+import com.prdv.rdv.iam.domain.model.user.Email;
 import com.prdv.rdv.iam.domain.model.user.PatientProfile;
 import com.prdv.rdv.iam.domain.model.user.ProfileType;
 import com.prdv.rdv.iam.domain.model.user.User;
@@ -25,7 +27,8 @@ import java.time.Clock;
 
 /**
  * Connexion via fournisseur d'identite OAuth2/OIDC : lie le compte social a un
- * compte existant (par email verifie) ou cree automatiquement un profil patient.
+ * compte existant (par email verifie) ou cree automatiquement un profil patient
+ * ou un compte SSO d'entreprise.
  */
 @Service
 public class SocialAuthenticationService implements SocialAuthenticationUseCase {
@@ -62,6 +65,7 @@ public class SocialAuthenticationService implements SocialAuthenticationUseCase 
             throw IamException.of(IamErrorCode.VALIDATION_ERROR,
                     "Le fournisseur d'identite n'a pas fourni d'email");
         }
+        RequestMetadata safeMeta = metadata == null ? RequestMetadata.unknown() : metadata;
 
         User user = socialAccountRepository.findByProviderAndProviderUserId(provider, providerUserId)
                 .map(link -> userRepository.findById(link.getUserId()).orElse(null))
@@ -106,6 +110,54 @@ public class SocialAuthenticationService implements SocialAuthenticationUseCase 
         }
 
         auditLogger.success(user.getId(), AuditLog.Action.SOCIAL_LOGIN, "connexion " + provider);
-        return tokenIssuance.completeLogin(user, metadata, false);
+        return tokenIssuance.completeLogin(user, safeMeta, false);
+    }
+
+    @Override
+    @Transactional
+    public AuthResults.TokenSet authenticateEnterpriseSso(AuthCommands.EnterpriseSsoLogin command) {
+        if (command.enterpriseDomain() == null || command.enterpriseDomain().isBlank()) {
+            throw IamException.of(IamErrorCode.VALIDATION_ERROR,
+                    "Le domaine d'entreprise SSO (enterpriseDomain) est obligatoire");
+        }
+        Email email = Email.of(command.email());
+        String domain = command.enterpriseDomain().trim().toLowerCase();
+        if (!email.value().endsWith("@" + domain)) {
+            throw IamException.of(IamErrorCode.VALIDATION_ERROR,
+                    "L'email SSO (" + email.value() + ") ne correspond pas au domaine d'entreprise (" + domain + ")");
+        }
+        String providerUserId = domain + ":" + command.idpSubject();
+        RequestMetadata safeMeta = command.metadata() == null ? RequestMetadata.unknown() : command.metadata();
+
+        User user = socialAccountRepository.findByProviderAndProviderUserId(
+                        SocialAccount.Provider.OIDC_ENTERPRISE, providerUserId)
+                .map(link -> userRepository.findById(link.getUserId()).orElse(null))
+                .orElseGet(() -> userRepository.findByEmail(email.value()).orElse(null));
+
+        if (user == null) {
+            ProfileType profileType = command.profileType() == null
+                    ? ProfileType.PATIENT : command.profileType();
+            user = User.fromSocialProvider(email.value(), profileType, clock);
+            String defaultRole = switch (profileType) {
+                case PRACTITIONER -> Role.PRACTITIONER;
+                case SECRETARY -> Role.SECRETARY;
+                case ESTABLISHMENT -> Role.ESTABLISHMENT;
+                case ADMIN -> Role.TECHNICAL_SUPPORT;
+                case PATIENT -> Role.PATIENT;
+            };
+            roleRepository.findByName(defaultRole).ifPresent(user::addRole);
+            user = userRepository.save(user);
+            if (profileType == ProfileType.PATIENT) {
+                patientProfileRepository.save(PatientProfile.create(
+                        user.getId(), command.firstName(), command.lastName(), null, null, null, clock));
+            }
+            socialAccountRepository.save(SocialAccount.link(
+                    user.getId(), SocialAccount.Provider.OIDC_ENTERPRISE, providerUserId, email.value(), clock));
+        }
+
+        user.assertCanAuthenticate(clock);
+        auditLogger.success(user.getId(), AuditLog.Action.SSO_LOGIN,
+                "connexion SSO entreprise (" + domain + ")");
+        return tokenIssuance.completeLogin(user, safeMeta, false);
     }
 }

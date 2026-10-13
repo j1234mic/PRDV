@@ -16,4 +16,7 @@ public interface RoleRepository {
     List<Role> findAll();
 
     Set<Role> findByNames(Collection<String> names);
+
+    default void deleteByName(String name) {
+    }
 }

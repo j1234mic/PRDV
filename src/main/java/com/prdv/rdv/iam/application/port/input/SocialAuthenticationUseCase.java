@@ -1,5 +1,6 @@
 package com.prdv.rdv.iam.application.port.input;
 
+import com.prdv.rdv.iam.application.command.AuthCommands;
 import com.prdv.rdv.iam.application.command.RequestMetadata;
 import com.prdv.rdv.iam.application.result.AuthResults;
 import com.prdv.rdv.iam.domain.model.auth.SocialAccount;
@@ -7,7 +8,7 @@ import com.prdv.rdv.iam.domain.model.auth.SocialAccount;
 /**
  * Connexion / creation automatique via un fournisseur OAuth2-OIDC
  * (Google, Apple, Microsoft, SSO d'entreprise). Appele par le gestionnaire
- * de succes Spring Security apres le flux « reseaux sociaux ».
+ * de succes Spring Security apres le flux « reseaux sociaux » ou via l'API REST.
  */
 public interface SocialAuthenticationUseCase {
 
@@ -17,4 +18,6 @@ public interface SocialAuthenticationUseCase {
                                       String firstName,
                                       String lastName,
                                       RequestMetadata metadata);
+
+    AuthResults.TokenSet authenticateEnterpriseSso(AuthCommands.EnterpriseSsoLogin command);
 }

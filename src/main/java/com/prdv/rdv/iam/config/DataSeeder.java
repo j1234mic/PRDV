@@ -161,6 +161,7 @@ public class DataSeeder implements ApplicationRunner {
         rolePermissions.put(Role.SUPER_ADMIN, allPermissionCodes());
         rolePermissions.put(Role.PATIENT, new LinkedHashSet<>(Arrays.asList(
                 "iam.user.read", "iam.user.update", "iam.session.read", "iam.session.revoke",
+                "iam.biometric.manage", "iam.security.e2ee",
                 "iam.kyc.upload", "iam.kyc.read", "iam.import.data", "iam.delegation.read",
                 "appointment.read", "appointment.write", "appointment.cancel",
                 // Module 2 : le patient gere son profil, son dossier et ses donnees
@@ -172,7 +173,9 @@ public class DataSeeder implements ApplicationRunner {
                 "profile.data.export", "profile.data.erase", "profile.rating.write")));
         rolePermissions.put(Role.PRACTITIONER, new LinkedHashSet<>(Arrays.asList(
                 "iam.user.read", "iam.user.update", "iam.session.read", "iam.session.revoke",
+                "iam.biometric.manage", "iam.security.e2ee",
                 "iam.kyc.upload", "iam.kyc.read", "iam.practitioner.register", "iam.practitioner.read",
+                "iam.secretary.register",
                 "iam.establishment.read", "iam.delegation.read", "iam.delegation.write",
                 "agenda.read", "agenda.write", "appointment.read", "appointment.write",
                 "appointment.cancel", "medicalrecord.read", "prescription.write", "billing.read",
@@ -183,31 +186,37 @@ public class DataSeeder implements ApplicationRunner {
                 "profile.dossier.read", "profile.dossier.write",
                 "profile.location.read", "profile.location.write")));
         rolePermissions.put(Role.SECRETARY, new LinkedHashSet<>(Arrays.asList(
-                "iam.user.read", "iam.session.read", "iam.practitioner.read",
+                "iam.user.read", "iam.session.read", "iam.biometric.manage", "iam.security.e2ee",
+                "iam.practitioner.read",
                 "iam.establishment.read", "iam.kyc.read", "iam.delegation.read",
                 "agenda.read", "appointment.read", "appointment.write", "appointment.cancel",
                 // Module 2 : acces delegé, toujours re-verifié par les regles de visibilite
                 "profile.identity.read", "profile.document.read")));
         rolePermissions.put(Role.ESTABLISHMENT, new LinkedHashSet<>(Arrays.asList(
                 "iam.user.read", "iam.user.update", "iam.session.read", "iam.session.revoke",
+                "iam.biometric.manage", "iam.security.e2ee",
                 "iam.establishment.register", "iam.establishment.read", "iam.establishment.manage",
                 "iam.practitioner.read", "iam.secretary.register", "iam.kyc.read",
                 "agenda.read", "appointment.read", "billing.read", "billing.write",
                 // Module 2 : annuaire et lieux d'exercice des praticiens rattachés
                 "profile.dossier.read", "profile.location.read")));
         rolePermissions.put(Role.MODERATOR, new LinkedHashSet<>(Arrays.asList(
-                "iam.user.read", "iam.user.update", "iam.practitioner.read", "iam.establishment.read",
+                "iam.user.read", "iam.user.update", "iam.biometric.manage",
+                "iam.practitioner.read", "iam.establishment.read",
                 "iam.kyc.read", "iam.kyc.review", "iam.practitioner.approve",
                 "iam.audit.read", "iam.role.read",
                 // Module 2 : consultation des dossiers professionnels (moderation des avis)
                 "profile.dossier.read")));
         rolePermissions.put(Role.TECHNICAL_SUPPORT, new LinkedHashSet<>(Arrays.asList(
                 "iam.user.read", "iam.session.read", "iam.session.revoke",
+                "iam.biometric.manage", "iam.security.admin",
                 "iam.audit.read", "iam.role.read")));
         rolePermissions.put(Role.COMMERCIAL_SUPPORT, new LinkedHashSet<>(Arrays.asList(
-                "iam.user.read", "iam.practitioner.read", "iam.establishment.read",
+                "iam.user.read", "iam.biometric.manage",
+                "iam.practitioner.read", "iam.establishment.read",
                 "iam.analytics.read")));
-        rolePermissions.put(Role.DATA_ANALYST, new LinkedHashSet<>(Set.of("iam.analytics.read")));
+        rolePermissions.put(Role.DATA_ANALYST, new LinkedHashSet<>(Arrays.asList(
+                "iam.analytics.read", "iam.biometric.manage")));
         return rolePermissions;
     }
 
@@ -261,6 +270,9 @@ public class DataSeeder implements ApplicationRunner {
             {"iam.delegation.write", "iam", "Accorder ou revoquer une delegation"},
             {"iam.import.data", "iam", "Importer ses donnees depuis une autre plateforme"},
             {"iam.analytics.read", "iam", "Consulter les donnees analytics anonymisees"},
+            {"iam.biometric.manage", "iam", "Gerer ses facteurs biometriques (empreinte, Face ID, Passkey)"},
+            {"iam.security.e2ee", "security", "Chiffrement et dechiffrement end-to-end (E2EE) des donnees medicales"},
+            {"iam.security.admin", "security", "Supervision WAF/DDoS, Penetration Testing et triage Bug Bounty"},
             // Modules metiers suivants (apercu du plan de permissions)
             {"agenda.read", "agenda", "Consulter un agenda"},
             {"agenda.write", "agenda", "Gerer un agenda"},

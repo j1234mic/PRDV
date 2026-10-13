@@ -92,6 +92,41 @@ public class RoleAdministrationService implements RoleAdministrationUseCase {
                 "roles de l'utilisateur #" + user.getId() + " -> " + command.roleNames());
     }
 
+    @Override
+    @Transactional
+    public Views.RoleView updateRole(AdminCommands.UpdateRole command) {
+        String name = normalizeRoleName(command.roleName());
+        Role role = roleRepository.findByName(name)
+                .orElseThrow(() -> IamException.of(IamErrorCode.NOT_FOUND, "Role introuvable : " + name));
+        if (role.isSystem()) {
+            throw IamException.of(IamErrorCode.FORBIDDEN,
+                    "Les roles systeme predefinis ne peuvent pas etre modifies manuellement");
+        }
+        Set<Permission> permissions = command.permissionCodes() == null
+                ? new HashSet<>() : new HashSet<>(permissionRepository.findByCodes(command.permissionCodes()));
+        if (command.description() != null && !command.description().isBlank()) {
+            role.setDescription(command.description());
+        }
+        role.setPermissions(permissions);
+        Role saved = roleRepository.save(role);
+        auditLogger.success(securityContext.currentUserId().orElse(null),
+                AuditLog.Action.ROLE_CREATED, "mise a jour du role personnalise " + name);
+        return viewMapper.roleView(saved);
+    }
+
+    @Override
+    @Transactional
+    public void deleteCustomRole(String roleName) {
+        String name = normalizeRoleName(roleName);
+        Role role = roleRepository.findByName(name)
+                .orElseThrow(() -> IamException.of(IamErrorCode.NOT_FOUND, "Role introuvable : " + name));
+        if (role.isSystem()) {
+            throw IamException.of(IamErrorCode.FORBIDDEN,
+                    "Impossible de supprimer un role systeme predefini");
+        }
+        roleRepository.deleteByName(name);
+    }
+
     private static String normalizeRoleName(String name) {
         String normalized = name == null ? "" : name.trim().toUpperCase().replace(' ', '_');
         if (!normalized.startsWith("ROLE_")) {

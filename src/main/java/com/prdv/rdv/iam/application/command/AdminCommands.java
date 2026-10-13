@@ -1,10 +1,12 @@
 package com.prdv.rdv.iam.application.command;
 
+import com.prdv.rdv.iam.domain.model.user.AdminType;
+
 import java.util.Set;
 
 /**
  * Commandes d'administration : roles, validation des dossiers, revue KYC,
- * suspension de comptes, delegations.
+ * suspension de comptes, delegations, creation d'administrateurs systeme.
  */
 public final class AdminCommands {
 
@@ -31,5 +33,17 @@ public final class AdminCommands {
                                   String reason,
                                   java.time.Instant validFrom,
                                   java.time.Instant validUntil) {
+    }
+
+    /** Creation d'un administrateur systeme (Super admin, Moderateur, Support tech/commercial, Analyste). */
+    public record CreateAdministrator(String email, String phone, String password, AdminType adminType) {
+    }
+
+    /** Mise a jour des permissions d'un role personnalise. */
+    public record UpdateRole(String roleName, String description, Set<String> permissionCodes) {
+    }
+
+    /** Attribution directe de permissions granulaires a un utilisateur. */
+    public record UpdateDirectPermissions(Long userId, Set<String> permissionCodes) {
     }
 }

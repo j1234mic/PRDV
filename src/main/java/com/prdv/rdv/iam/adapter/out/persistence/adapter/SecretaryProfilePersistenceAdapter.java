@@ -41,4 +41,10 @@ public class SecretaryProfilePersistenceAdapter implements SecretaryProfileRepos
         return jpa.findBySupervisedPractitionerId(practitionerUserId).stream()
                 .map(mapper::toDomain).toList();
     }
+
+    @Override
+    public List<SecretaryProfile> findByAccessibleEstablishmentId(Long establishmentUserId) {
+        return jpa.findByAccessibleEstablishmentId(establishmentUserId).stream()
+                .map(mapper::toDomain).toList();
+    }
 }

@@ -7,6 +7,7 @@ import com.prdv.rdv.iam.application.port.output.PatientProfileRepository;
 import com.prdv.rdv.iam.domain.model.user.PatientProfile;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -33,5 +34,12 @@ public class PatientProfilePersistenceAdapter implements PatientProfileRepositor
     @Override
     public Optional<PatientProfile> findByUserId(Long userId) {
         return jpa.findByUserId(userId).map(mapper::toDomain);
+    }
+
+    @Override
+    public List<PatientProfile> findByGuardianUserId(Long guardianUserId) {
+        return jpa.findByGuardianUserId(guardianUserId).stream()
+                .map(mapper::toDomain)
+                .toList();
     }
 }

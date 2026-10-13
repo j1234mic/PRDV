@@ -33,6 +33,14 @@ public class PractitionerProfileEntity extends AbstractProfileEntity {
     private boolean professionalInsuranceVerified;
     private boolean bankAccountVerified;
 
+    @Column(length = 120)
+    private String insuranceCompany;
+
+    @Column(length = 80)
+    private String insurancePolicyNumber;
+
+    private java.time.LocalDate insuranceExpiresAt;
+
     @Column(length = 255)
     private String ribToken;
 

@@ -14,4 +14,7 @@ public interface SecretaryProfileJpaRepository extends JpaRepository<SecretaryPr
 
     @Query("select s from SecretaryProfileEntity s join s.supervisedPractitionerIds p where p = :practitionerId")
     List<SecretaryProfileEntity> findBySupervisedPractitionerId(@Param("practitionerId") Long practitionerId);
+
+    @Query("select s from SecretaryProfileEntity s join s.accessibleEstablishmentIds e where e = :establishmentId")
+    List<SecretaryProfileEntity> findByAccessibleEstablishmentId(@Param("establishmentId") Long establishmentId);
 }

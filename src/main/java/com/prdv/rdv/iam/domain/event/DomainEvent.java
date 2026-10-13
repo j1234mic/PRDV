@@ -39,4 +39,24 @@ public interface DomainEvent {
     record PractitionerReviewed(Long userId, boolean approved, String reason, Instant occurredAt)
             implements DomainEvent {
     }
+
+    /** Enrolement d'un facteur biometrique (empreinte, Face ID, passkey). */
+    record BiometricCredentialEnrolled(Long userId, String modality, String deviceName, Instant occurredAt)
+            implements DomainEvent {
+    }
+
+    /** Facture groupee emise pour un etablissement de sante. */
+    record GroupInvoiceIssued(Long establishmentUserId, String invoiceNumber, long totalAmountCents,
+                              Instant occurredAt) implements DomainEvent {
+    }
+
+    /** Attaque applicative bloquee par le WAF. */
+    record WafAttackDetected(String ipAddress, String ruleName, String path, Instant occurredAt)
+            implements DomainEvent {
+    }
+
+    /** Rapport de vulnerabilite soumis au programme de Bug Bounty. */
+    record BugBountyReportSubmitted(Long reportId, String severity, String title, Instant occurredAt)
+            implements DomainEvent {
+    }
 }

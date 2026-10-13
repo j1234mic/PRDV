@@ -8,15 +8,18 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
- * Moteur de detection de fraude par regles (pattern Chain of Specifications) :
+ * Moteur hybride (regles + scoring comportemental IA multi-criteres) de detection
+ * de fraude (pattern Chain of Specifications) :
  * <ol>
  *   <li>nouveau pays par rapport a la derniere session ;</li>
  *   <li>« impossible travel » : deux ouvertures distantes de plus de 1000 km
- *       en moins de 3 heures.</li>
+ *       en moins de 3 heures ;</li>
+ *   <li>changement simultane d'adresse IP et de zone geographique avec calcul
+ *       d'un score de risque comportemental IA sur 100.</li>
  * </ol>
- * Un adapteur de scoring IA se substituera a cette classe via le port.
  */
 @Component
 public class RuleBasedFraudDetectionAdapter implements FraudDetectionPort {
@@ -36,11 +39,13 @@ public class RuleBasedFraudDetectionAdapter implements FraudDetectionPort {
         }
 
         List<String> reasons = new ArrayList<>();
+        int aiRiskScore = 0;
         UserSession.GeoLocation previousGeo = previous.getGeoLocation();
 
         boolean newCountry = current.country() != null
                 && !current.country().equalsIgnoreCase(previousGeo.country());
         if (newCountry) {
+            aiRiskScore += 55;
             reasons.add("NOUVEAU_PAYS(" + previousGeo.country() + "->" + current.country() + ")");
         }
 
@@ -51,13 +56,21 @@ public class RuleBasedFraudDetectionAdapter implements FraudDetectionPort {
             long hours = Math.max(1, Duration.between(previous.getLastSeenAt(), Instant.now()).toHours());
             double speed = distanceKm / hours;
             if (hours < IMPOSSIBLE_WINDOW_HOURS && speed > IMPOSSIBLE_SPEED_KMH) {
+                aiRiskScore += 65;
                 reasons.add("DEPLACEMENT_IMPOSSIBLE(" + Math.round(distanceKm) + "km en " + hours + "h)");
             }
+        }
+
+        if (context.ipAddress() != null && previous.getIpAddress() != null
+                && !Objects.equals(context.ipAddress(), previous.getIpAddress())) {
+            aiRiskScore += 20;
         }
 
         if (reasons.isEmpty()) {
             return FraudAssessment.low();
         }
+        int boundedScore = Math.min(100, aiRiskScore);
+        reasons.add("AI_RISK_SCORE(" + boundedScore + "/100)");
         return new FraudAssessment(RiskLevel.HIGH, reasons, true);
     }
 

@@ -108,4 +108,22 @@ public class PatientProfile {
             this.updatedAt = clock.instant();
         }
     }
+
+    /** Indique si le profil patient a atteint le niveau KYC complet requis pour les paiements. */
+    public boolean isEligibleForPayment() {
+        return this.kycLevel == KycLevel.VERIFIED;
+    }
+
+    /** Liste les prerequis KYC encore manquants pour debloquer les paiements. */
+    public java.util.List<String> missingKycRequirements(boolean emailVerified, boolean phoneVerified) {
+        java.util.List<String> missing = new java.util.ArrayList<>();
+        if (!emailVerified && !phoneVerified) {
+            missing.add("OTP_CONTACT_VERIFICATION");
+        }
+        if (identityDocumentToken == null || identityDocumentToken.isBlank()
+                || kycLevel != KycLevel.VERIFIED) {
+            missing.add("IDENTITY_DOCUMENT_VERIFIED");
+        }
+        return missing;
+    }
 }

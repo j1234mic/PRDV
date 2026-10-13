@@ -21,4 +21,21 @@ public interface EstablishmentRegistrationUseCase {
     List<Views.MembershipView> memberships();
 
     Views.MembershipView reviewMembership(ProfileCommands.ReviewMembership command);
+
+    void revokeMembership(Long membershipId);
+
+    /** Gestion centralisee des services / departements de l'etablissement. */
+    Views.EstablishmentView updateDepartments(ProfileCommands.UpdateDepartments command);
+
+    /** Facturation groupee : emission d'une facture consolidee multi-praticiens. */
+    Views.GroupInvoiceView issueGroupInvoice(ProfileCommands.IssueGroupInvoice command);
+
+    /** Facturation groupee : liste des factures consolidees de l'etablissement. */
+    List<Views.GroupInvoiceView> listGroupInvoices();
+
+    /** Facturation groupee : reglement d'une facture consolidee. */
+    Views.GroupInvoiceView payGroupInvoice(Long invoiceId);
+
+    /** Tableau de bord consolide de l'etablissement de sante. */
+    Views.EstablishmentDashboardView consolidatedDashboard();
 }

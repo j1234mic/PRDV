@@ -8,6 +8,7 @@ import com.prdv.rdv.iam.application.port.output.BankAccountVerificationPort;
 import com.prdv.rdv.iam.application.port.output.ContractRepository;
 import com.prdv.rdv.iam.application.port.output.DomainEventPublisher;
 import com.prdv.rdv.iam.application.port.output.EstablishmentProfileRepository;
+import com.prdv.rdv.iam.application.port.output.InsuranceVerificationPort;
 import com.prdv.rdv.iam.application.port.output.MedicalRegistryPort;
 import com.prdv.rdv.iam.application.port.output.MembershipRepository;
 import com.prdv.rdv.iam.application.port.output.PractitionerProfileRepository;
@@ -47,6 +48,7 @@ public class PractitionerRegistrationService implements PractitionerRegistration
     private final EstablishmentProfileRepository establishmentProfileRepository;
     private final MedicalRegistryPort medicalRegistry;
     private final BankAccountVerificationPort bankVerification;
+    private final InsuranceVerificationPort insuranceVerification;
     private final TokenizationPort tokenization;
     private final KycDocumentsUseCase kycDocumentsUseCase;
     private final ContractRepository contractRepository;
@@ -64,6 +66,7 @@ public class PractitionerRegistrationService implements PractitionerRegistration
                                            EstablishmentProfileRepository establishmentProfileRepository,
                                            MedicalRegistryPort medicalRegistry,
                                            BankAccountVerificationPort bankVerification,
+                                           InsuranceVerificationPort insuranceVerification,
                                            TokenizationPort tokenization,
                                            KycDocumentsUseCase kycDocumentsUseCase,
                                            ContractRepository contractRepository,
@@ -77,6 +80,7 @@ public class PractitionerRegistrationService implements PractitionerRegistration
         this.establishmentProfileRepository = establishmentProfileRepository;
         this.medicalRegistry = medicalRegistry;
         this.bankVerification = bankVerification;
+        this.insuranceVerification = insuranceVerification;
         this.tokenization = tokenization;
         this.kycDocumentsUseCase = kycDocumentsUseCase;
         this.contractRepository = contractRepository;
@@ -86,6 +90,25 @@ public class PractitionerRegistrationService implements PractitionerRegistration
         this.auditLogger = auditLogger;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
+    }
+
+    public PractitionerRegistrationService(RegistrationSupport registrationSupport,
+                                           UserRepository userRepository,
+                                           PractitionerProfileRepository profileRepository,
+                                           EstablishmentProfileRepository establishmentProfileRepository,
+                                           MedicalRegistryPort medicalRegistry,
+                                           BankAccountVerificationPort bankVerification,
+                                           TokenizationPort tokenization,
+                                           KycDocumentsUseCase kycDocumentsUseCase,
+                                           ContractRepository contractRepository,
+                                           MembershipRepository membershipRepository,
+                                           SecurityContextPort securityContext,
+                                           ViewMapper viewMapper, AuditLogger auditLogger,
+                                           DomainEventPublisher eventPublisher, Clock clock) {
+        this(registrationSupport, userRepository, profileRepository, establishmentProfileRepository,
+                medicalRegistry, bankVerification, null, tokenization, kycDocumentsUseCase,
+                contractRepository, membershipRepository, securityContext,
+                viewMapper, auditLogger, eventPublisher, clock);
     }
 
     public PractitionerRegistrationService(RegistrationSupport registrationSupport,
@@ -101,7 +124,7 @@ public class PractitionerRegistrationService implements PractitionerRegistration
                                            ViewMapper viewMapper, AuditLogger auditLogger,
                                            DomainEventPublisher eventPublisher, Clock clock) {
         this(registrationSupport, userRepository, profileRepository, null,
-                medicalRegistry, bankVerification, tokenization, kycDocumentsUseCase,
+                medicalRegistry, bankVerification, null, tokenization, kycDocumentsUseCase,
                 contractRepository, membershipRepository, securityContext,
                 viewMapper, auditLogger, eventPublisher, clock);
     }
@@ -181,6 +204,60 @@ public class PractitionerRegistrationService implements PractitionerRegistration
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<Views.ContractView> myContracts() {
+        Long userId = securityContext.requireCurrentUserId();
+        return contractRepository.findAllByPractitionerUserId(userId).stream()
+                .map(viewMapper::contractView).toList();
+    }
+
+    @Override
+    @Transactional
+    public Views.PractitionerInsuranceView verifyInsurance(ProfileCommands.VerifyInsurance command) {
+        Long userId = securityContext.requireCurrentUserId();
+        PractitionerProfile profile = requireProfile(userId);
+        if (insuranceVerification != null) {
+            InsuranceVerificationPort.InsuranceCheck check = insuranceVerification.verify(
+                    command.company(), command.policyNumber(), command.expiresAt(),
+                    profile.getLastName() + " " + profile.getFirstName());
+            if (!check.valid()) {
+                throw IamException.of(IamErrorCode.VALIDATION_ERROR,
+                        "Assurance RC Pro refusee : " + check.reason());
+            }
+        }
+        profile.recordVerifiedInsurance(command.company(), command.policyNumber(), command.expiresAt(), clock);
+        PractitionerProfile saved = profileRepository.save(profile);
+        auditLogger.success(userId, AuditLog.Action.INSURANCE_VERIFIED,
+                "RC Pro verifiee : " + saved.getInsuranceCompany() + " #" + saved.getInsurancePolicyNumber());
+        return viewMapper.practitionerInsuranceView(saved);
+    }
+
+    @Override
+    @Transactional
+    public Views.PractitionerView updateBankAccount(ProfileCommands.UpdateBankAccount command) {
+        Long userId = securityContext.requireCurrentUserId();
+        User user = requireUser(userId);
+        PractitionerProfile profile = requireProfile(userId);
+        if (command.iban() == null || command.iban().isBlank()) {
+            throw IamException.of(IamErrorCode.VALIDATION_ERROR, "L'IBAN est obligatoire");
+        }
+        BankAccountVerificationPort.BankCheck bankCheck =
+                bankVerification.verify(command.iban(), profile.getLastName() + " " + profile.getFirstName());
+        if (!bankCheck.valid()) {
+            throw IamException.of(IamErrorCode.VALIDATION_ERROR,
+                    "Le RIB/IBAN n'a pas pu etre verifie : " + bankCheck.reason());
+        }
+        profile.setBankAccountVerified(true);
+        profile.storeBankDetails(tokenization.tokenize(command.iban(), NS_IBAN),
+                tokenization.mask(command.iban()));
+        profile.setUpdatedAt(clock.instant());
+        PractitionerProfile saved = profileRepository.save(profile);
+        auditLogger.success(userId, AuditLog.Action.BANK_ACCOUNT_UPDATED,
+                "RIB verifie et tokenise (" + saved.getMaskedIban() + ")");
+        return viewMapper.practitionerView(user, saved);
+    }
+
+    @Override
     @Transactional
     public Views.MembershipView requestMembership(ProfileCommands.RequestMembership command) {
         Long practitionerId = securityContext.requireCurrentUserId();
@@ -229,6 +306,28 @@ public class PractitionerRegistrationService implements PractitionerRegistration
                 EstablishmentMembership.MemberRole.REPLACER,
                 command.validFrom(), command.validUntil(), clock);
         return viewMapper.membershipView(membershipRepository.save(membership));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Views.MembershipView> myReplacements() {
+        Long userId = securityContext.requireCurrentUserId();
+        return membershipRepository.findByPractitionerUserId(userId).stream()
+                .filter(m -> m.getMemberRole() == EstablishmentMembership.MemberRole.REPLACER)
+                .map(viewMapper::membershipView).toList();
+    }
+
+    @Override
+    @Transactional
+    public void revokeReplacement(Long membershipId) {
+        Long userId = securityContext.requireCurrentUserId();
+        EstablishmentMembership membership = membershipRepository.findById(membershipId)
+                .orElseThrow(() -> IamException.of(IamErrorCode.NOT_FOUND, "Remplacement introuvable"));
+        if (!membership.getPractitionerUserId().equals(userId)) {
+            throw IamException.of(IamErrorCode.FORBIDDEN, "Ce remplacement appartient a un autre praticien");
+        }
+        membership.revoke(clock);
+        membershipRepository.save(membership);
     }
 
     @Override

@@ -87,22 +87,22 @@ d'autre que lui-même (hors `java.*` et Lombok).
 
 | Exigence | Réalisation |
 |---|---|
-| Patients : email/tél/social, OTP, CNI/passeport, mineur, import, KYC | `PatientRegistrationService`, `ContactVerificationService`, KYC (`KycDocumentsService`), `guardianUserId`, `DataImportService`, login social OAuth2 |
-| Praticiens : validation manuelle, diplômes, RPPS/ADELI, RIB, RC pro, contrat e-, multi-établissements, remplaçants | `PractitionerRegistrationService`, `MedicalRegistryPort` (+stub), `BankAccountVerificationPort`, `PractitionerContract`, `EstablishmentMembership` (rôles OWNER/EMPLOYEE/REPLACER), validation admin |
-| Secrétaires : compte lié, droits granulaires, multi-cabinets, audit | `SecretaryRegistrationService`, `User.directPermissions`, `supervisedPractitionerIds`, audit trail |
-| Établissements : compte multi-praticiens, centralisé, facturation groupée, tableau de bord, départements | `EstablishmentRegistrationService`, `EstablishmentProfile.departments`, gestion des rattachements (permissions `billing.*` prêtes) |
-| Administrateurs : super-admin, modérateurs, support tech/commercial, analystes | Rôles seeds + `AdminType`; endpoints `/admin/**` gardés par permissions ; super-admin amorcé |
+| Patients : email/tél/social, OTP, CNI/passeport, mineur, import, KYC | `PatientRegistrationService` (email ou téléphone seul, création et liste des profils mineurs `POST/GET /patients/me/minors`, statut KYC `GET /patients/me/kyc`), `ContactVerificationService` (OTP Email & SMS indépendants), KYC (`KycDocumentsService`), `DataImportService` (`CsvProfileImportAdapter` + `JsonProfileImportAdapter`), login social OAuth2 |
+| Praticiens : validation manuelle, diplômes, RPPS/ADELI, RIB, RC pro, contrat e-, multi-établissements, remplaçants | `PractitionerRegistrationService`, `MedicalRegistryPort` (+stub), `BankAccountVerificationPort` (`PUT /practitioners/me/bank-account`), `InsuranceVerificationPort` (`POST /practitioners/me/insurance`), `PractitionerContract` (`POST /practitioners/me/contract`, `GET /practitioners/me/contracts`), `EstablishmentMembership` (rôles OWNER/EMPLOYEE/REPLACER, désignation de remplaçant, `GET/DELETE /practitioners/me/replacements`), validation admin |
+| Secrétaires : compte lié, droits granulaires, multi-cabinets, audit | `SecretaryRegistrationService`, `SecretaryController` (`GET /secretaries/me`, `PUT /secretaries/{id}/permissions`, `PUT /secretaries/{id}/assignments`, `GET /secretaries/{id}/audit`), `User.directPermissions`, `supervisedPractitionerIds`, `accessibleEstablishmentIds` |
+| Établissements : compte multi-praticiens, centralisé, facturation groupée, tableau de bord, départements | `EstablishmentRegistrationService`, `EstablishmentProfile.departments` (`PUT /establishments/me/departments`), gestion centralisée des rattachements (`GET/POST/DELETE /establishments/me/memberships`), facturation groupée (`GroupInvoice`, `POST/GET /establishments/me/billing/invoices`), tableau de bord consolidé (`GET /establishments/me/dashboard`) |
+| Administrateurs : super-admin, modérateurs, support tech/commercial, analystes | Rôles seeds + `AdminType`; création et filtrage des 5 sous-profils via `POST/GET /admin/administrators` ; endpoints `/admin/**` gardés par permissions ; super-admin amorcé |
 
 ### 1.2 Authentification & sécurité
 
 | Exigence | Réalisation |
 |---|---|
-| 2FA/MFA | TOTP RFC 6238 (`TotpAdapter`, setup QR `otpauth://`) + OTP email step-up |
-| Biométrie (empreinte/Face ID) | Côté terminal (WebAuthn/FIDO2) qui consomme le challenge MFA ; le port `TotpPort`/OTP couvre le second facteur. Un adapteur WebAuthn peut se brancher sur le même port de challenge. |
-| SSO, OAuth 2.0 / OIDC | `spring-boot-starter-oauth2-client`, profil `social`, `SocialLoginSuccessHandler` (Google ; Keycloak/Azure/Okta en configuration) |
-| JWT + refresh, sessions, détection connexions suspectes, blocage auto, historique IP/device/géoloc | `JwtTokenAdapter`, refresh rotatifs, `SessionService`, `RuleBasedFraudDetectionAdapter`, verrouillage, `UserSession` + `GeoLocationPort` |
-| RBAC : rôles personnalisables, permissions granulaires, délégation temporaire, logs, révocation immédiate | `RoleAdministrationService`, permissions `module:action`, `DelegationService`, `AuditLog`, recalcul des autorités par requête + `tokenVersion` |
-| Chiffrement E2E médical, tokenisation, anonymisation, IA fraude, WAF/DDoS, pentest, bug bounty | AES-GCM at rest (`EncryptedStringConverter`), `HmacTokenizationAdapter`, `AnalyticsQueryService` (anonymisation), moteur de règles de fraude remplaçable par une IA, `RateLimitFilter` + headers de sécurité. Le **WAF/DDoS**, la protection transport (TLS), les pentests et le bug bounty sont des mesures d'infrastructure/gouvernance (voir §6). |
+| 2FA/MFA | TOTP RFC 6238 (`TotpAdapter`, setup QR `otpauth://`) + OTP email/SMS step-up |
+| Biométrie (empreinte/Face ID) | `BiometricCredential`, `BiometricAuthenticationService`, `BiometricSignatureVerifierAdapter` (`POST /auth/biometric/enroll`, `GET/DELETE /auth/biometric/credentials`, `POST /auth/biometric/challenge`, `POST /auth/biometric/verify`) |
+| SSO, OAuth 2.0 / OIDC | `spring-boot-starter-oauth2-client`, profil `social`, `SocialLoginSuccessHandler` + SSO Entreprise (`POST /auth/sso/enterprise` via `SocialAuthenticationService.authenticateEnterpriseSso`) |
+| JWT + refresh, sessions, détection connexions suspectes, blocage auto, historique IP/device/géoloc | `JwtTokenAdapter`, refresh rotatifs, `SessionService`, `RuleBasedFraudDetectionAdapter` (scoring comportemental IA `[0..100]` + Haversine), verrouillage, `UserSession` + `GeoLocationPort` |
+| RBAC : rôles personnalisables, permissions granulaires, délégation temporaire, logs, révocation immédiate | `RoleAdministrationService` (`POST/PUT/DELETE /admin/roles`, filtre par module), permissions directes (`PUT /admin/users/{id}/permissions`), `DelegationService`, `AuditLog`, recalcul des autorités par requête + `tokenVersion` (`POST /admin/users/{id}/revoke-tokens`) |
+| Chiffrement E2E médical, tokenisation, anonymisation, IA fraude, WAF/DDoS, pentest, bug bounty | `AdvancedSecurityService` (`/security/e2ee/keys`, `/seal`, `/open`) + AES-256-GCM at rest (`EncryptedStringConverter`), `HmacTokenizationAdapter`, `AnalyticsQueryService` + `GET /admin/analytics/summary`, `WafFilter` + `RateLimitFilter` + `WafDdosProtectionRegistry` (`/security/waf/status`), auto-audit & rapports Pentest (`/security/pentest/**`), Bug Bounty Program & RFC 9116 (`/.well-known/security.txt`, `/security/bug-bounty/**`) |
 
 ## 6. Évolutions d'infrastructure (hors code applicatif)
 

@@ -22,10 +22,22 @@ public interface PractitionerRegistrationUseCase {
 
     Views.ContractView acceptContract(ProfileCommands.AcceptContract command);
 
+    List<Views.ContractView> myContracts();
+
+    /** Valide l'assurance responsabilite civile professionnelle (RC Pro). */
+    Views.PractitionerInsuranceView verifyInsurance(ProfileCommands.VerifyInsurance command);
+
+    /** Met a jour et verifie le RIB/IBAN du praticien pour les paiements. */
+    Views.PractitionerView updateBankAccount(ProfileCommands.UpdateBankAccount command);
+
     /** Le praticien demande son rattachement a un cabinet (ou un remplacement). */
     Views.MembershipView requestMembership(ProfileCommands.RequestMembership command);
 
     Views.MembershipView declareReplacement(ProfileCommands.DeclareReplacement command);
+
+    List<Views.MembershipView> myReplacements();
+
+    void revokeReplacement(Long membershipId);
 
     List<Views.MembershipView> myMemberships();
 }

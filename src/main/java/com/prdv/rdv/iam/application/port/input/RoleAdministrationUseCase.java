@@ -15,4 +15,8 @@ public interface RoleAdministrationUseCase {
     List<Views.PermissionView> listPermissions();
 
     void assignRoles(AdminCommands.AssignRoles command);
+
+    Views.RoleView updateRole(AdminCommands.UpdateRole command);
+
+    void deleteCustomRole(String roleName);
 }
