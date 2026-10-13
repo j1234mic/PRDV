@@ -172,7 +172,7 @@ class Module1CompletenessTest {
                 securityContext, viewMapper, eventPublisher, FIXED_CLOCK);
 
         Views.PatientView minorView = service.registerMinor(new RegistrationCommands.RegisterMinorPatient(
-                null, null, null, "Leo", "Martin", LocalDate.of(2016, 4, 15), PatientProfile.Gender.MALE));
+                null, null, null, "Leo", "Martin", LocalDate.of(2016, 4, 15), PatientProfile.Gender.M));
 
         assertThat(minorView.minor()).isTrue();
         assertThat(minorView.guardianUserId()).isEqualTo(guardianId);
