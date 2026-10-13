@@ -44,6 +44,16 @@ public final class PractitionerDtos {
     public record AcceptContractRequest(@NotBlank String version, @NotBlank String contentHash) {
     }
 
+    public record VerifyInsuranceRequest(
+            @NotBlank String insuranceCompany,
+            @NotBlank String policyNumber,
+            @JsonDeserialize(using = LenientLocalDateDeserializer.class)
+            LocalDate expiresAt) {
+    }
+
+    public record UpdateBankAccountRequest(@NotBlank String iban) {
+    }
+
     public record MembershipRequest(
             @NotNull(message = "L'identifiant de l'etablissement (establishmentUserId) est obligatoire")
             @JsonAlias({"establishmentId", "cabinetId", "establishment_user_id", "establishment_id"})
@@ -66,10 +76,16 @@ public final class PractitionerDtos {
             @NotNull(message = "L'identifiant de l'etablissement (establishmentUserId) est obligatoire")
             @JsonAlias({"establishmentId", "cabinetId", "establishment_user_id", "establishment_id"})
             Long establishmentUserId,
+            @JsonAlias({"replacerUserId", "replacerId"})
+            Long replacerPractitionerUserId,
             @JsonDeserialize(using = LenientLocalDateDeserializer.class)
             LocalDate validFrom,
             @JsonDeserialize(using = LenientLocalDateDeserializer.class)
             LocalDate validUntil) {
+
+        public ReplacementRequest(Long establishmentUserId, LocalDate validFrom, LocalDate validUntil) {
+            this(establishmentUserId, null, validFrom, validUntil);
+        }
     }
 
     /**

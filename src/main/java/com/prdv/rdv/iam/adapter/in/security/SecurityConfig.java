@@ -33,6 +33,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RateLimitFilter rateLimitFilter;
+    private final WafFilter wafFilter;
     private final SecurityRestHandlers restHandlers;
     private final ObjectProvider<ClientRegistrationRepository> clientRegistrationRepository;
     private final ObjectProvider<AuthenticationSuccessHandler> socialSuccessHandler;
@@ -42,8 +43,20 @@ public class SecurityConfig {
                           SecurityRestHandlers restHandlers,
                           ObjectProvider<ClientRegistrationRepository> clientRegistrationRepository,
                           ObjectProvider<AuthenticationSuccessHandler> socialSuccessHandler) {
+        this(jwtAuthenticationFilter, rateLimitFilter, null, restHandlers,
+                clientRegistrationRepository, socialSuccessHandler);
+    }
+
+    @ org.springframework.beans.factory.annotation.Autowired
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
+                          RateLimitFilter rateLimitFilter,
+                          WafFilter wafFilter,
+                          SecurityRestHandlers restHandlers,
+                          ObjectProvider<ClientRegistrationRepository> clientRegistrationRepository,
+                          ObjectProvider<AuthenticationSuccessHandler> socialSuccessHandler) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.rateLimitFilter = rateLimitFilter;
+        this.wafFilter = wafFilter;
         this.restHandlers = restHandlers;
         this.clientRegistrationRepository = clientRegistrationRepository;
         this.socialSuccessHandler = socialSuccessHandler;
@@ -60,11 +73,18 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/register/**",
                                 "/api/v1/auth/login", "/api/v1/auth/login/**",
+                                "/api/v1/auth/biometric/challenge",
+                                "/api/v1/auth/biometric/verify",
+                                "/api/v1/auth/sso/**",
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/otp/**").permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/practitioners/register",
-                                "/api/v1/establishments/register").permitAll()
+                                "/api/v1/establishments/register",
+                                "/api/v1/security/bug-bounty/reports").permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/.well-known/security.txt",
+                                "/api/v1/security/bug-bounty/policy").permitAll()
                         // Module 2 : annuaire des praticiens consultable sans compte
                         // (la notation d'un praticien reste authentifiee : seul GET est ouvert)
                         .requestMatchers(HttpMethod.GET, "/api/v1/directory/**").permitAll()
@@ -78,6 +98,9 @@ public class SecurityConfig {
                         .accessDeniedHandler(restHandlers.accessDeniedHandler()))
                 .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        if (wafFilter != null) {
+            http.addFilterBefore(wafFilter, RateLimitFilter.class);
+        }
 
         // OAuth2 / OIDC (Google, Apple, SSO entreprise) - actif avec le profil "social"
         if (clientRegistrationRepository.getIfAvailable() != null) {
@@ -107,6 +130,13 @@ public class SecurityConfig {
     @Bean
     public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(RateLimitFilter filter) {
         FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<WafFilter> wafFilterRegistration(WafFilter filter) {
+        FilterRegistrationBean<WafFilter> registration = new FilterRegistrationBean<>(filter);
         registration.setEnabled(false);
         return registration;
     }

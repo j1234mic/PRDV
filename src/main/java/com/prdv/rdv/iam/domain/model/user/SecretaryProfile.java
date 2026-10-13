@@ -25,11 +25,20 @@ public class SecretaryProfile {
     /** Identifiants des praticiens dont la secretaire gere les agendas. */
     private Set<Long> supervisedPractitionerIds = new HashSet<>();
 
+    /** Identifiants des cabinets/etablissements auxquels la secretaire a acces (acces multi-cabinets). */
+    private Set<Long> accessibleEstablishmentIds = new HashSet<>();
+
     private Instant createdAt;
     private Instant updatedAt;
 
     public static SecretaryProfile create(Long userId, String firstName, String lastName,
                                           Set<Long> practitionerIds, Clock clock) {
+        return create(userId, firstName, lastName, practitionerIds, Set.of(), clock);
+    }
+
+    public static SecretaryProfile create(Long userId, String firstName, String lastName,
+                                          Set<Long> practitionerIds, Set<Long> establishmentIds,
+                                          Clock clock) {
         SecretaryProfile p = new SecretaryProfile();
         p.userId = userId;
         p.firstName = firstName;
@@ -37,8 +46,23 @@ public class SecretaryProfile {
         if (practitionerIds != null) {
             p.supervisedPractitionerIds = new HashSet<>(practitionerIds);
         }
+        if (establishmentIds != null) {
+            p.accessibleEstablishmentIds = new HashSet<>(establishmentIds);
+        }
         p.createdAt = clock.instant();
         p.updatedAt = p.createdAt;
         return p;
+    }
+
+    public void assignPractitioners(Set<Long> practitionerIds, Clock clock) {
+        this.supervisedPractitionerIds = practitionerIds == null
+                ? new HashSet<>() : new HashSet<>(practitionerIds);
+        this.updatedAt = clock.instant();
+    }
+
+    public void assignEstablishments(Set<Long> establishmentIds, Clock clock) {
+        this.accessibleEstablishmentIds = establishmentIds == null
+                ? new HashSet<>() : new HashSet<>(establishmentIds);
+        this.updatedAt = clock.instant();
     }
 }

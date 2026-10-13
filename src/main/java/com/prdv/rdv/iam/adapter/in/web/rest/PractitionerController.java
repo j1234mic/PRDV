@@ -15,8 +15,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -28,7 +31,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/practitioners")
-@Tag(name = "Praticiens", description = "Inscription, KYC, contrats, multi-etablissements, remplaçants")
+@Tag(name = "Praticiens", description = "Inscription, KYC, RC Pro, RIB, contrats, multi-etablissements, remplacants")
 public class PractitionerController {
 
     private final PractitionerRegistrationUseCase practitionerUseCase;
@@ -73,6 +76,24 @@ public class PractitionerController {
                 null, type, file.getOriginalFilename(), file.getContentType(), readBytes(file)));
     }
 
+    @PostMapping("/me/insurance")
+    @PreAuthorize("hasAuthority('iam.practitioner.read')")
+    @Operation(summary = "Verifier et enregistrer son assurance Responsabilite Civile Professionnelle (RC Pro)")
+    public Views.PractitionerView verifyInsurance(
+            @Valid @RequestBody PractitionerDtos.VerifyInsuranceRequest request) {
+        return practitionerUseCase.verifyInsurance(new ProfileCommands.VerifyPractitionerInsurance(
+                request.insuranceCompany(), request.policyNumber(), request.expiresAt()));
+    }
+
+    @PutMapping("/me/bank-account")
+    @PreAuthorize("hasAuthority('iam.practitioner.read')")
+    @Operation(summary = "Verifier et mettre a jour son RIB / IBAN pour les paiements")
+    public Views.PractitionerView updateBankAccount(
+            @Valid @RequestBody PractitionerDtos.UpdateBankAccountRequest request) {
+        return practitionerUseCase.updateBankAccount(
+                new ProfileCommands.UpdatePractitionerBankAccount(request.iban()));
+    }
+
     @PostMapping("/me/contract")
     @PreAuthorize("hasAuthority('iam.practitioner.read')")
     @Operation(summary = "Accepter le contrat electronique d'adhesion")
@@ -80,6 +101,13 @@ public class PractitionerController {
                                              HttpServletRequest httpRequest) {
         return practitionerUseCase.acceptContract(new ProfileCommands.AcceptContract(
                 request.version(), request.contentHash(), httpRequest.getRemoteAddr()));
+    }
+
+    @GetMapping("/me/contracts")
+    @PreAuthorize("hasAuthority('iam.practitioner.read')")
+    @Operation(summary = "Consulter l'historique des contrats electroniques d'adhesion signes")
+    public List<Views.ContractView> myContracts() {
+        return practitionerUseCase.myContracts();
     }
 
     @PostMapping("/me/memberships")
@@ -92,10 +120,31 @@ public class PractitionerController {
 
     @PostMapping("/me/replacements")
     @PreAuthorize("hasAuthority('iam.practitioner.read')")
-    @Operation(summary = "Declarer un remplacement dans un etablissement sur une plage donnee")
+    @Operation(summary = "Declarer un remplacement ou designer un praticien remplacant sur une plage donnee")
     public Views.MembershipView declareReplacement(@Valid @RequestBody PractitionerDtos.ReplacementRequest request) {
+        if (request.replacerPractitionerUserId() != null) {
+            return practitionerUseCase.designateReplacer(new ProfileCommands.DesignateReplacer(
+                    request.establishmentUserId(),
+                    request.replacerPractitionerUserId(),
+                    request.validFrom(),
+                    request.validUntil()));
+        }
         return practitionerUseCase.declareReplacement(new ProfileCommands.DeclareReplacement(
                 request.establishmentUserId(), request.validFrom(), request.validUntil()));
+    }
+
+    @GetMapping("/me/replacements")
+    @PreAuthorize("hasAuthority('iam.practitioner.read')")
+    @Operation(summary = "Lister ses remplacements actifs ou en attente")
+    public List<Views.MembershipView> myReplacements() {
+        return practitionerUseCase.myReplacements();
+    }
+
+    @DeleteMapping("/me/replacements/{id}")
+    @PreAuthorize("hasAuthority('iam.practitioner.read')")
+    @Operation(summary = "Cloturer / revoquer un remplacement")
+    public Views.MembershipView revokeReplacement(@PathVariable Long id) {
+        return practitionerUseCase.revokeReplacement(id);
     }
 
     @GetMapping("/me/memberships")
@@ -113,11 +162,14 @@ public class PractitionerController {
 
     @PostMapping("/secretaries")
     @PreAuthorize("hasAuthority('iam.secretary.register')")
-    @Operation(summary = "Creer un compte secretaire medicale rattache")
+    @Operation(summary = "Creer un compte secretaire medicale rattache (mono ou multi-cabinets)")
     public Views.SecretaryView createSecretary(@Valid @RequestBody SecretaryDtos.RegisterSecretaryRequest request) {
-        return secretaryUseCase.create(new RegistrationCommands.RegisterSecretary(
-                request.email(), request.firstName(), request.lastName(),
-                request.supervisedPractitionerIds(), request.permissionCodes()));
+        return secretaryUseCase.createWithMultiCabinet(
+                new RegistrationCommands.RegisterSecretaryWithEstablishments(
+                        request.email(), request.firstName(), request.lastName(),
+                        request.supervisedPractitionerIds(),
+                        request.accessibleEstablishmentIds(),
+                        request.permissionCodes()));
     }
 
     private static byte[] readBytes(MultipartFile file) {

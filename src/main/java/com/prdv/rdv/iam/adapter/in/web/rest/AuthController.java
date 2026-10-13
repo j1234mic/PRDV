@@ -5,36 +5,45 @@ import com.prdv.rdv.iam.adapter.in.web.dto.AuthDtos;
 import com.prdv.rdv.iam.application.command.AuthCommands;
 import com.prdv.rdv.iam.application.command.RegistrationCommands;
 import com.prdv.rdv.iam.application.port.input.AuthenticationUseCase;
+import com.prdv.rdv.iam.application.port.input.BiometricAuthenticationUseCase;
 import com.prdv.rdv.iam.application.port.input.ContactVerificationUseCase;
 import com.prdv.rdv.iam.application.port.input.MfaManagementUseCase;
 import com.prdv.rdv.iam.application.port.input.PatientRegistrationUseCase;
+import com.prdv.rdv.iam.application.port.input.SocialAuthenticationUseCase;
 import com.prdv.rdv.iam.application.result.AuthResults;
 import com.prdv.rdv.iam.application.result.Views;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /**
- * Endpoints publics d'authentification et de gestion du second facteur.
+ * Endpoints publics d'authentification, biometrie, SSO entreprise et gestion du second facteur.
  */
 @RestController
 @RequestMapping("/api/v1/auth")
-@Tag(name = "Authentification", description = "Inscription, connexion, OTP, MFA, sessions")
+@Tag(name = "Authentification", description = "Inscription, connexion, OTP, MFA, biometrie, SSO, sessions")
 public class AuthController {
 
     private final AuthenticationUseCase authenticationUseCase;
     private final ContactVerificationUseCase contactVerificationUseCase;
     private final PatientRegistrationUseCase patientRegistrationUseCase;
     private final MfaManagementUseCase mfaManagementUseCase;
+    private final BiometricAuthenticationUseCase biometricAuthenticationUseCase;
+    private final SocialAuthenticationUseCase socialAuthenticationUseCase;
     private final HttpRequestMetadata httpRequestMetadata;
 
     public AuthController(AuthenticationUseCase authenticationUseCase,
@@ -42,15 +51,29 @@ public class AuthController {
                           PatientRegistrationUseCase patientRegistrationUseCase,
                           MfaManagementUseCase mfaManagementUseCase,
                           HttpRequestMetadata httpRequestMetadata) {
+        this(authenticationUseCase, contactVerificationUseCase, patientRegistrationUseCase,
+                mfaManagementUseCase, null, null, httpRequestMetadata);
+    }
+
+    @Autowired
+    public AuthController(AuthenticationUseCase authenticationUseCase,
+                          ContactVerificationUseCase contactVerificationUseCase,
+                          PatientRegistrationUseCase patientRegistrationUseCase,
+                          MfaManagementUseCase mfaManagementUseCase,
+                          BiometricAuthenticationUseCase biometricAuthenticationUseCase,
+                          SocialAuthenticationUseCase socialAuthenticationUseCase,
+                          HttpRequestMetadata httpRequestMetadata) {
         this.authenticationUseCase = authenticationUseCase;
         this.contactVerificationUseCase = contactVerificationUseCase;
         this.patientRegistrationUseCase = patientRegistrationUseCase;
         this.mfaManagementUseCase = mfaManagementUseCase;
+        this.biometricAuthenticationUseCase = biometricAuthenticationUseCase;
+        this.socialAuthenticationUseCase = socialAuthenticationUseCase;
         this.httpRequestMetadata = httpRequestMetadata;
     }
 
     @PostMapping("/register/patient")
-    @Operation(summary = "Inscription d'un patient (declenche un OTP email/SMS)")
+    @Operation(summary = "Inscription d'un patient par email ou telephone (declenche un OTP email/SMS)")
     public Views.OtpSentView registerPatient(@Valid @RequestBody AuthDtos.RegisterPatientRequest request,
                                              HttpServletRequest httpRequest) {
         return patientRegistrationUseCase.register(new RegistrationCommands.RegisterPatient(
@@ -81,6 +104,67 @@ public class AuthController {
                                                  HttpServletRequest httpRequest) {
         return authenticationUseCase.verifyLoginOtp(new AuthCommands.VerifyLoginOtp(
                 request.challengeToken(), request.code(), httpRequestMetadata.from(httpRequest)));
+    }
+
+    // ----------------------------------- Biometrie (Empreinte, Face ID, Passkey)
+    @PostMapping("/biometric/enroll")
+    @PreAuthorize("hasAuthority('iam.biometric.manage')")
+    @Operation(summary = "Enregistrer un facteur biometrique (Touch ID / Face ID / Passkey)")
+    public ResponseEntity<Views.BiometricCredentialView> enrollBiometric(
+            @Valid @RequestBody AuthDtos.EnrollBiometricRequest request) {
+        Views.BiometricCredentialView view = biometricAuthenticationUseCase.enroll(
+                new AuthCommands.EnrollBiometric(
+                        request.credentialId(), request.publicKey(),
+                        request.modality(), request.deviceName()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(view);
+    }
+
+    @GetMapping("/biometric/credentials")
+    @PreAuthorize("hasAuthority('iam.biometric.manage')")
+    @Operation(summary = "Lister ses facteurs biometriques enregistres")
+    public List<Views.BiometricCredentialView> listBiometricCredentials() {
+        return biometricAuthenticationUseCase.listMyCredentials();
+    }
+
+    @DeleteMapping("/biometric/credentials/{id}")
+    @PreAuthorize("hasAuthority('iam.biometric.manage')")
+    @Operation(summary = "Revoquer un facteur biometrique")
+    public ResponseEntity<Void> revokeBiometricCredential(@PathVariable Long id) {
+        biometricAuthenticationUseCase.revoke(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/biometric/challenge")
+    @Operation(summary = "Obtenir un defi cryptographique pour une connexion biometrique")
+    public AuthResults.Challenge requestBiometricChallenge(
+            @Valid @RequestBody AuthDtos.BiometricChallengeRequest request) {
+        return biometricAuthenticationUseCase.issueChallenge(
+                new AuthCommands.RequestBiometricChallenge(request.email(), request.credentialId()));
+    }
+
+    @PostMapping("/biometric/verify")
+    @Operation(summary = "Authentification par assertion biometrique signee")
+    public AuthResults.AuthResult verifyBiometric(
+            @Valid @RequestBody AuthDtos.VerifyBiometricRequest request,
+            HttpServletRequest httpRequest) {
+        return biometricAuthenticationUseCase.authenticate(new AuthCommands.VerifyBiometric(
+                request.challengeToken(), request.credentialId(),
+                request.signature(), request.signCount(),
+                httpRequestMetadata.from(httpRequest)));
+    }
+
+    // --------------------------------------------------- SSO Entreprise
+    @PostMapping("/sso/enterprise")
+    @Operation(summary = "Connexion Single Sign-On (SSO) entreprise (Hopital / Clinique / Federation)")
+    public AuthResults.AuthResult enterpriseSsoLogin(
+            @Valid @RequestBody AuthDtos.EnterpriseSsoLoginRequest request,
+            HttpServletRequest httpRequest) {
+        return socialAuthenticationUseCase.authenticateEnterpriseSso(
+                new AuthCommands.EnterpriseSsoLogin(
+                        request.provider(), request.tenantDomain(), request.externalSubject(),
+                        request.email(), request.firstName(), request.lastName(),
+                        request.targetProfileType(), request.establishmentUserId(),
+                        httpRequestMetadata.from(httpRequest)));
     }
 
     @PostMapping("/refresh")

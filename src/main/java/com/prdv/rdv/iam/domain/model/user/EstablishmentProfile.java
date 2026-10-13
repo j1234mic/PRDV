@@ -42,4 +42,38 @@ public class EstablishmentProfile {
         e.updatedAt = e.createdAt;
         return e;
     }
+
+    /** Remplace la liste des services/departements de l'etablissement (sans doublons ni vides). */
+    public void updateDepartments(List<String> newDepartments, Clock clock) {
+        List<String> cleaned = new ArrayList<>();
+        if (newDepartments != null) {
+            for (String dept : newDepartments) {
+                if (dept != null && !dept.isBlank()) {
+                    String trimmed = dept.trim();
+                    if (!cleaned.contains(trimmed)) {
+                        cleaned.add(trimmed);
+                    }
+                }
+            }
+        }
+        this.departments = cleaned;
+        this.updatedAt = clock.instant();
+    }
+
+    public void addDepartment(String department, Clock clock) {
+        if (department != null && !department.isBlank()) {
+            String trimmed = department.trim();
+            if (!this.departments.contains(trimmed)) {
+                this.departments.add(trimmed);
+                this.updatedAt = clock.instant();
+            }
+        }
+    }
+
+    public void removeDepartment(String department, Clock clock) {
+        if (department != null) {
+            this.departments.removeIf(d -> d.equalsIgnoreCase(department.trim()));
+            this.updatedAt = clock.instant();
+        }
+    }
 }

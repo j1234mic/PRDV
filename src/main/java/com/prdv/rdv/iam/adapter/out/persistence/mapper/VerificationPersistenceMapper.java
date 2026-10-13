@@ -1,12 +1,16 @@
 package com.prdv.rdv.iam.adapter.out.persistence.mapper;
 
 import com.prdv.rdv.iam.adapter.out.persistence.entity.EstablishmentMembershipEntity;
+import com.prdv.rdv.iam.adapter.out.persistence.entity.GroupInvoiceEntity;
 import com.prdv.rdv.iam.adapter.out.persistence.entity.KycDocumentEntity;
 import com.prdv.rdv.iam.adapter.out.persistence.entity.PractitionerContractEntity;
 import com.prdv.rdv.iam.domain.model.verification.EstablishmentMembership;
+import com.prdv.rdv.iam.domain.model.verification.GroupInvoice;
 import com.prdv.rdv.iam.domain.model.verification.KycDocument;
 import com.prdv.rdv.iam.domain.model.verification.PractitionerContract;
 import org.springframework.stereotype.Component;
+
+import java.util.HashSet;
 
 @Component
 public class VerificationPersistenceMapper {
@@ -90,6 +94,46 @@ public class VerificationPersistenceMapper {
         d.setValidUntil(e.getValidUntil());
         d.setRequestedAt(e.getRequestedAt());
         d.setDecidedAt(e.getDecidedAt());
+        return d;
+    }
+
+    public GroupInvoiceEntity toEntity(GroupInvoice d) {
+        GroupInvoiceEntity e = new GroupInvoiceEntity();
+        e.setId(d.getId());
+        e.setEstablishmentUserId(d.getEstablishmentUserId());
+        e.setInvoiceNumber(d.getInvoiceNumber());
+        e.setPeriodStart(d.getPeriodStart());
+        e.setPeriodEnd(d.getPeriodEnd());
+        e.setDepartment(d.getDepartment());
+        e.setPractitionerUserIds(new HashSet<>(d.getPractitionerUserIds()));
+        e.setConsultationsCount(d.getConsultationsCount());
+        e.setTotalAmountCents(d.getTotalAmountCents());
+        e.setPlatformFeeCents(d.getPlatformFeeCents());
+        e.setNetAmountCents(d.getNetAmountCents());
+        e.setCurrency(d.getCurrency());
+        e.setStatus(d.getStatus());
+        e.setCreatedAt(d.getCreatedAt());
+        e.setPaidAt(d.getPaidAt());
+        return e;
+    }
+
+    public GroupInvoice toDomain(GroupInvoiceEntity e) {
+        GroupInvoice d = new GroupInvoice();
+        d.setId(e.getId());
+        d.setEstablishmentUserId(e.getEstablishmentUserId());
+        d.setInvoiceNumber(e.getInvoiceNumber());
+        d.setPeriodStart(e.getPeriodStart());
+        d.setPeriodEnd(e.getPeriodEnd());
+        d.setDepartment(e.getDepartment());
+        d.setPractitionerUserIds(new HashSet<>(e.getPractitionerUserIds()));
+        d.setConsultationsCount(e.getConsultationsCount());
+        d.setTotalAmountCents(e.getTotalAmountCents());
+        d.setPlatformFeeCents(e.getPlatformFeeCents());
+        d.setNetAmountCents(e.getNetAmountCents());
+        d.setCurrency(e.getCurrency());
+        d.setStatus(e.getStatus());
+        d.setCreatedAt(e.getCreatedAt());
+        d.setPaidAt(e.getPaidAt());
         return d;
     }
 }

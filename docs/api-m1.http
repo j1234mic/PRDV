@@ -201,3 +201,219 @@ Content-Type: application/json
 {
   "refreshToken": "{{refreshToken}}"
 }
+
+### 20. Patient : profil, eligibilite KYC paiement et profils mineurs rattaches
+GET {{base}}/patients/me
+Authorization: Bearer {{accessToken}}
+
+###
+GET {{base}}/patients/me/kyc
+Authorization: Bearer {{accessToken}}
+
+###
+POST {{base}}/patients/me/minors
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "firstName": "Lucas",
+  "lastName": "Martin",
+  "birthDate": "2016-05-14",
+  "gender": "MALE"
+}
+
+###
+GET {{base}}/patients/me/minors
+Authorization: Bearer {{accessToken}}
+
+### 21. Praticien : verification RC Pro, mise a jour RIB, contrats et remplacants
+POST {{base}}/practitioners/me/insurance
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "insuranceCompany": "MACSF",
+  "policyNumber": "RCPRO-2026-889900",
+  "expiresAt": "2027-12-31"
+}
+
+###
+PUT {{base}}/practitioners/me/bank-account
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "iban": "FR7630006000011234567890189"
+}
+
+###
+GET {{base}}/practitioners/me/contracts
+Authorization: Bearer {{accessToken}}
+
+###
+GET {{base}}/practitioners/me/replacements
+Authorization: Bearer {{accessToken}}
+
+### 22. Secretaire medicale : profil, droits granulaires, multi-cabinets et audit trail
+GET {{base}}/secretaries/me
+Authorization: Bearer {{accessToken}}
+
+###
+PUT {{base}}/secretaries/5/permissions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "permissionCodes": ["agenda.read", "agenda.write", "appointment.read", "appointment.write", "appointment.cancel"]
+}
+
+###
+PUT {{base}}/secretaries/5/assignments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "supervisedPractitionerIds": [2],
+  "accessibleEstablishmentIds": [3]
+}
+
+###
+GET {{base}}/secretaries/5/audit
+Authorization: Bearer {{accessToken}}
+
+### 23. Etablissement : services/departements, facturation groupee et tableau de bord consolide
+PUT {{base}}/establishments/me/departments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "departments": ["Cardiologie", "Imagerie", "Pediatrie", "Urgences"]
+}
+
+###
+POST {{base}}/establishments/me/billing/invoices
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "periodStart": "2026-10-01",
+  "periodEnd": "2026-10-31",
+  "department": "Cardiologie",
+  "practitionerUserIds": [2],
+  "consultationsCount": 85,
+  "totalAmountCents": 425000,
+  "platformFeeRatePercent": 5
+}
+
+###
+GET {{base}}/establishments/me/billing/invoices
+Authorization: Bearer {{accessToken}}
+
+###
+GET {{base}}/establishments/me/dashboard
+Authorization: Bearer {{accessToken}}
+
+### 24. Administrateurs systeme (5 sous-profils) & Revocation instantanee
+POST {{base}}/admin/administrators
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "email": "support.tech@prdv.local",
+  "phone": "+33611223399",
+  "password": "SupportPassword#2026",
+  "adminType": "TECHNICAL_SUPPORT"
+}
+
+###
+GET {{base}}/admin/administrators
+Authorization: Bearer {{adminToken}}
+
+###
+POST {{base}}/admin/users/2/revoke-tokens
+Authorization: Bearer {{adminToken}}
+
+### 25. Authentification biometrique (Touch ID / Face ID / Passkey) & SSO Entreprise
+POST {{base}}/auth/biometric/enroll
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "credentialId": "cred-faceid-iphone16-marie",
+  "publicKey": "pub-key-faceid-marie-2026",
+  "modality": "FACE_ID",
+  "deviceName": "iPhone 16 Pro de Marie"
+}
+
+###
+GET {{base}}/auth/biometric/credentials
+Authorization: Bearer {{accessToken}}
+
+###
+POST {{base}}/auth/biometric/challenge
+Content-Type: application/json
+
+{
+  "credentialId": "cred-faceid-iphone16-marie"
+}
+
+###
+POST {{base}}/auth/sso/enterprise
+Content-Type: application/json
+
+{
+  "provider": "OKTA_HOSPITAL_SSO",
+  "tenantDomain": "clinique-parc.fr",
+  "externalSubject": "oidc-sub-dr-moreau-99",
+  "email": "dr.moreau@clinique-parc.fr",
+  "firstName": "Claire",
+  "lastName": "Moreau",
+  "targetProfileType": "PRACTITIONER"
+}
+
+### 26. Securite Avancee : Chiffrement E2EE medical, WAF/DDoS, Pentest & Bug Bounty
+POST {{base}}/security/e2ee/keys
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "keyId": "e2ee-key-dr-dupont",
+  "algorithm": "ECDH-P256-AES256GCM",
+  "publicKeyPem": "-----BEGIN PUBLIC KEY-----MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A-----END PUBLIC KEY-----"
+}
+
+###
+POST {{base}}/security/e2ee/seal
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "recipientUserId": 2,
+  "plainPayload": "Compte-rendu cardiologique confidentiel : rythme sinusal normal."
+}
+
+###
+GET {{base}}/security/waf/status
+Authorization: Bearer {{adminToken}}
+
+###
+POST {{base}}/security/pentest/self-check
+Authorization: Bearer {{adminToken}}
+
+###
+GET {{base}}/security/bug-bounty/policy
+
+###
+POST {{base}}/security/bug-bounty/reports
+Content-Type: application/json
+
+{
+  "reporterEmail": "researcher@security.org",
+  "reporterAlias": "sec_hunter",
+  "title": "Divulgation d'en-tete serveur sur endpoint d'erreur",
+  "description": "Rapport detaille de reproduction...",
+  "affectedComponent": "iam-web",
+  "severity": "LOW",
+  "cvssScore": 3.1
+}
+

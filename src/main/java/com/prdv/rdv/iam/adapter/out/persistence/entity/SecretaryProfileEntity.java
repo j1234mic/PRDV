@@ -29,4 +29,10 @@ public class SecretaryProfileEntity extends AbstractProfileEntity {
             joinColumns = @JoinColumn(name = "secretary_profile_id"))
     @Column(name = "practitioner_user_id")
     private Set<Long> supervisedPractitionerIds = new HashSet<>();
+
+    @ElementCollection
+    @CollectionTable(name = "secretary_accessible_establishments",
+            joinColumns = @JoinColumn(name = "secretary_profile_id"))
+    @Column(name = "establishment_user_id")
+    private Set<Long> accessibleEstablishmentIds = new HashSet<>();
 }

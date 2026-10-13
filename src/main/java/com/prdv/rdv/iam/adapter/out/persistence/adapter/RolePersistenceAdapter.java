@@ -57,4 +57,9 @@ public class RolePersistenceAdapter implements RoleRepository {
     public Set<Role> findByNames(Collection<String> names) {
         return new HashSet<>(roleJpa.findByNameIn(names).stream().map(userMapper::toRoleDomain).toList());
     }
+
+    @Override
+    public void deleteByName(String name) {
+        roleJpa.findByName(name).ifPresent(roleJpa::delete);
+    }
 }

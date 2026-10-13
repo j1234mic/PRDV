@@ -46,8 +46,14 @@ public class RegistrationSupport {
     @Transactional
     public User createAccount(String rawEmail, String rawPhone, String rawPassword,
                               ProfileType profileType, String defaultRole) {
-        Email email = Email.of(rawEmail);
         PhoneNumber phone = rawPhone == null || rawPhone.isBlank() ? null : PhoneNumber.of(rawPhone);
+        if ((rawEmail == null || rawEmail.isBlank()) && phone == null) {
+            throw IamException.of(IamErrorCode.VALIDATION_ERROR,
+                    "Un email ou un numero de telephone est obligatoire pour l'inscription");
+        }
+        Email email = (rawEmail == null || rawEmail.isBlank())
+                ? Email.of("phone." + phone.value().replace("+", "") + "@phone.prdv.local")
+                : Email.of(rawEmail);
         PasswordPolicy.validate(rawPassword);
 
         if (userRepository.existsByEmail(email.value())) {
@@ -68,11 +74,11 @@ public class RegistrationSupport {
         return userRepository.save(user);
     }
 
-    /** Declenche l'OTP d'inscription sur le canal email (ou SMS si pas d'email). */
+    /** Declenche l'OTP d'inscription sur le canal email (ou SMS si inscription par telephone). */
     public Views.OtpSentView sendContactOtp(User user) {
         OtpChallenge.Channel channel = OtpChallenge.Channel.EMAIL;
         String target = user.getEmail();
-        if (target == null || target.isBlank()) {
+        if (target == null || target.isBlank() || target.endsWith("@phone.prdv.local")) {
             channel = OtpChallenge.Channel.SMS;
             target = user.getPhone();
         }

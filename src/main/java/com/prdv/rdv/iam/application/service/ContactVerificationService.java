@@ -54,25 +54,29 @@ public class ContactVerificationService implements ContactVerificationUseCase {
     @Override
     @Transactional
     public Views.UserView confirmRegistrationOtp(AuthCommands.VerifyRegistrationOtp command) {
-        String target = command.target().trim().toLowerCase();
-        User user = userRepository.findByEmail(target)
-                .or(() -> userRepository.findByPhone(command.target().trim()))
+        String rawTarget = command.target().trim();
+        String normalizedEmail = rawTarget.toLowerCase();
+        User user = userRepository.findByEmail(normalizedEmail)
+                .or(() -> userRepository.findByPhone(rawTarget))
                 .orElseThrow(() -> IamException.of(IamErrorCode.NOT_FOUND, "Aucun compte avec cette destination"));
 
-        if (user.getStatus() != AccountStatus.PENDING_EMAIL_VERIFICATION) {
+        boolean alreadyVerifiedOnChannel = (command.channel() == OtpChallenge.Channel.EMAIL && user.isEmailVerified())
+                || (command.channel() == OtpChallenge.Channel.SMS && user.isPhoneVerified());
+        if (user.getStatus() != AccountStatus.PENDING_EMAIL_VERIFICATION && alreadyVerifiedOnChannel) {
             throw IamException.of(IamErrorCode.VALIDATION_ERROR, "Aucune verification en attente pour ce compte");
         }
 
-        // verifyLatest persiste deja le challenge en REQUIRES_NEW (tentatives,
-        // consumed). S'il echoue, l'OtpChallenge est correctement marque.
-        otpIssuer.verifyLatest(target, OtpChallenge.Purpose.REGISTRATION, command.code());
+        String challengeTarget = command.channel() == OtpChallenge.Channel.SMS ? rawTarget : normalizedEmail;
+        otpIssuer.verifyLatest(challengeTarget, OtpChallenge.Purpose.REGISTRATION, command.code());
 
         if (command.channel() == OtpChallenge.Channel.EMAIL) {
             user.markEmailVerified();
         } else {
             user.markPhoneVerified();
         }
-        user.setStatus(RegistrationSupport.statusAfterOtp(user.getProfileType()));
+        if (user.getStatus() == AccountStatus.PENDING_EMAIL_VERIFICATION) {
+            user.setStatus(RegistrationSupport.statusAfterOtp(user.getProfileType()));
+        }
         User saved = userRepository.save(user);
 
         // Niveau KYC BASIQUE pour le patient dont les coordonnees sont verifiees
@@ -91,16 +95,22 @@ public class ContactVerificationService implements ContactVerificationUseCase {
     @Override
     @Transactional
     public Views.OtpSentView resend(AuthCommands.ResendOtp command) {
-        String target = command.target().trim().toLowerCase();
-        User user = userRepository.findByEmail(target)
-                .or(() -> userRepository.findByPhone(command.target().trim()))
+        String rawTarget = command.target().trim();
+        String normalizedEmail = rawTarget.toLowerCase();
+        User user = userRepository.findByEmail(normalizedEmail)
+                .or(() -> userRepository.findByPhone(rawTarget))
                 .orElseThrow(() -> IamException.of(IamErrorCode.NOT_FOUND, "Compte introuvable"));
 
-        if (user.getStatus() != AccountStatus.PENDING_EMAIL_VERIFICATION) {
+        boolean alreadyVerifiedOnChannel = (command.channel() == OtpChallenge.Channel.EMAIL && user.isEmailVerified())
+                || (command.channel() == OtpChallenge.Channel.SMS && user.isPhoneVerified());
+        if (command.purpose() == OtpChallenge.Purpose.REGISTRATION
+                && user.getStatus() != AccountStatus.PENDING_EMAIL_VERIFICATION
+                && alreadyVerifiedOnChannel) {
             throw IamException.of(IamErrorCode.VALIDATION_ERROR, "Aucun code en attente pour ce compte");
         }
-        otpIssuer.assertResendCooldown(target, command.purpose());
-        Views.OtpSentView view = otpIssuer.issue(target, command.channel(), command.purpose());
+        String challengeTarget = command.channel() == OtpChallenge.Channel.SMS ? rawTarget : normalizedEmail;
+        otpIssuer.assertResendCooldown(challengeTarget, command.purpose());
+        Views.OtpSentView view = otpIssuer.issue(challengeTarget, command.channel(), command.purpose());
         auditLogger.success(user.getId(), AuditLog.Action.OTP_REQUESTED, "renvoi OTP " + command.purpose());
         return view;
     }

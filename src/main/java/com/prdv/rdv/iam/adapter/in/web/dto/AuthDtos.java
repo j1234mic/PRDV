@@ -1,7 +1,9 @@
 package com.prdv.rdv.iam.adapter.in.web.dto;
 
+import com.prdv.rdv.iam.domain.model.auth.BiometricCredential;
 import com.prdv.rdv.iam.domain.model.auth.OtpChallenge;
 import com.prdv.rdv.iam.domain.model.user.PatientProfile;
+import com.prdv.rdv.iam.domain.model.user.ProfileType;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -20,7 +22,7 @@ public final class AuthDtos {
     }
 
     public record RegisterPatientRequest(
-            @NotBlank @Email String email,
+            @Email String email,
             @Pattern(regexp = "^\\+[1-9]\\d{6,14}$", message = "telephone E.164 ex : +33612345678") String phone,
             @NotBlank @Size(min = 8, message = "au moins 8 caracteres") String password,
             @NotBlank String firstName,
@@ -54,5 +56,35 @@ public final class AuthDtos {
     }
 
     public record MfaEnableRequest(@NotBlank String code) {
+    }
+
+    public record EnrollBiometricRequest(
+            @NotBlank String credentialId,
+            @NotBlank String publicKey,
+            BiometricCredential.BiometricModality modality,
+            String deviceName) {
+    }
+
+    public record BiometricChallengeRequest(
+            String email,
+            String credentialId) {
+    }
+
+    public record VerifyBiometricRequest(
+            @NotBlank String challengeToken,
+            @NotBlank String credentialId,
+            @NotBlank String signature,
+            long signCount) {
+    }
+
+    public record EnterpriseSsoLoginRequest(
+            @NotBlank String provider,
+            String tenantDomain,
+            @NotBlank String externalSubject,
+            @NotBlank @Email String email,
+            String firstName,
+            String lastName,
+            ProfileType targetProfileType,
+            Long establishmentUserId) {
     }
 }

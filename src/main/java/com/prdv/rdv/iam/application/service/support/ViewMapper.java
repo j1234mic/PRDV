@@ -2,16 +2,21 @@ package com.prdv.rdv.iam.application.service.support;
 
 import com.prdv.rdv.iam.application.result.Views;
 import com.prdv.rdv.iam.domain.model.audit.AuditLog;
+import com.prdv.rdv.iam.domain.model.auth.BiometricCredential;
 import com.prdv.rdv.iam.domain.model.auth.Delegation;
 import com.prdv.rdv.iam.domain.model.auth.UserSession;
 import com.prdv.rdv.iam.domain.model.rbac.Permission;
 import com.prdv.rdv.iam.domain.model.rbac.Role;
+import com.prdv.rdv.iam.domain.model.security.BugBountyReport;
+import com.prdv.rdv.iam.domain.model.security.E2eeUserKey;
+import com.prdv.rdv.iam.domain.model.security.PentestReport;
 import com.prdv.rdv.iam.domain.model.user.EstablishmentProfile;
 import com.prdv.rdv.iam.domain.model.user.PatientProfile;
 import com.prdv.rdv.iam.domain.model.user.PractitionerProfile;
 import com.prdv.rdv.iam.domain.model.user.SecretaryProfile;
 import com.prdv.rdv.iam.domain.model.user.User;
 import com.prdv.rdv.iam.domain.model.verification.EstablishmentMembership;
+import com.prdv.rdv.iam.domain.model.verification.GroupInvoice;
 import com.prdv.rdv.iam.domain.model.verification.KycDocument;
 import com.prdv.rdv.iam.domain.model.verification.PractitionerContract;
 import org.springframework.stereotype.Component;
@@ -48,14 +53,38 @@ public class ViewMapper {
                 p.getMaskedIban(), p.isApplicationComplete());
     }
 
+    public Views.PractitionerInsuranceView practitionerInsuranceView(PractitionerProfile p) {
+        return new Views.PractitionerInsuranceView(p.getUserId(),
+                p.isProfessionalInsuranceVerified(),
+                p.getInsuranceCompany(),
+                p.getInsurancePolicyNumber(),
+                p.getInsuranceExpiresAt());
+    }
+
     public Views.SecretaryView secretaryView(User user, SecretaryProfile s) {
         return new Views.SecretaryView(userView(user), s.getFirstName(), s.getLastName(),
                 s.getSupervisedPractitionerIds().stream().sorted().toList());
     }
 
+    public Views.SecretaryDetailView secretaryDetailView(User user, SecretaryProfile s) {
+        return new Views.SecretaryDetailView(userView(user), s.getFirstName(), s.getLastName(),
+                s.getSupervisedPractitionerIds().stream().sorted().toList(),
+                s.getAccessibleEstablishmentIds().stream().sorted().toList(),
+                user.getDirectPermissions().stream().sorted().toList());
+    }
+
     public Views.EstablishmentView establishmentView(User user, EstablishmentProfile e) {
         return new Views.EstablishmentView(userView(user), e.getLegalName(), e.getSiret(),
                 e.getAddress(), List.copyOf(e.getDepartments()));
+    }
+
+    public Views.GroupInvoiceView groupInvoiceView(GroupInvoice i) {
+        return new Views.GroupInvoiceView(i.getId(), i.getEstablishmentUserId(),
+                i.getInvoiceNumber(), i.getPeriodStart(), i.getPeriodEnd(),
+                i.getDepartment(), i.getPractitionerUserIds().stream().sorted().toList(),
+                i.getConsultationsCount(), i.getTotalAmountCents(), i.getPlatformFeeCents(),
+                i.getNetAmountCents(), i.getCurrency(), i.getStatus(),
+                i.getCreatedAt(), i.getPaidAt());
     }
 
     public Views.SessionView sessionView(UserSession s, boolean current) {
@@ -64,6 +93,12 @@ public class ViewMapper {
                 s.getDeviceLabel(), geo == null ? null : geo.country(),
                 geo == null ? null : geo.city(),
                 s.isSuspicious(), current, s.getCreatedAt(), s.getLastSeenAt());
+    }
+
+    public Views.BiometricCredentialView biometricCredentialView(BiometricCredential c) {
+        return new Views.BiometricCredentialView(c.getId(), c.getUserId(),
+                c.getCredentialId(), c.getModality(), c.getDeviceName(),
+                c.getSignCount(), c.isRevoked(), c.getCreatedAt(), c.getLastUsedAt());
     }
 
     public Views.KycDocumentView kycView(KycDocument d) {
@@ -106,6 +141,26 @@ public class ViewMapper {
         return new Views.DelegationView(d.getId(), d.getGranterUserId(), d.getGranteeUserId(),
                 d.getPermissionCodes().stream().sorted().toList(),
                 d.getReason(), d.getValidFrom(), d.getValidUntil(), d.getRevokedAt());
+    }
+
+    public Views.E2eePublicKeyView e2eeKeyView(E2eeUserKey k) {
+        return new Views.E2eePublicKeyView(k.getId(), k.getUserId(), k.getKeyId(),
+                k.getAlgorithm(), k.getPublicKeyPem(), k.getFingerprint(),
+                k.isActive(), k.getCreatedAt());
+    }
+
+    public Views.PentestReportView pentestReportView(PentestReport r) {
+        return new Views.PentestReportView(r.getId(), r.getCampaignName(), r.getAuditor(),
+                r.getScope(), r.getFindingsCount(), r.getCriticalCount(), r.getHighCount(),
+                r.getMediumCount(), r.getLowCount(), r.getSecurityScore(), r.getStatus(),
+                r.getSummary(), List.copyOf(r.getFindings()), r.getExecutedAt(), r.getNextScheduledAt());
+    }
+
+    public Views.BugBountyReportView bugBountyReportView(BugBountyReport r) {
+        return new Views.BugBountyReportView(r.getId(), r.getReporterEmail(), r.getReporterAlias(),
+                r.getTitle(), r.getDescription(), r.getAffectedComponent(), r.getSeverity(),
+                r.getCvssScore(), r.getStatus(), r.getBountyAmountCents(), r.getResolutionNote(),
+                r.getSubmittedAt(), r.getResolvedAt());
     }
 
     public List<Views.UserView> userViews(List<User> users) {

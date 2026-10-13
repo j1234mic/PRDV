@@ -57,4 +57,25 @@ public final class RegistrationCommands {
             List<String> departments,
             RequestMetadata metadata) {
     }
+
+    /** Inscription d'un profil patient mineur directement rattache au parent/tuteur connecte. */
+    public record RegisterMinorPatient(
+            String email,
+            String phone,
+            String password,
+            String firstName,
+            String lastName,
+            LocalDate birthDate,
+            PatientProfile.Gender gender) {
+    }
+
+    /** Creation d'une secretaire medicale avec acces multi-cabinets et permissions granulaires. */
+    public record RegisterSecretaryMultiCabinet(
+            String email,
+            String firstName,
+            String lastName,
+            Set<Long> supervisedPractitionerIds,
+            Set<Long> accessibleEstablishmentIds,
+            Set<String> permissionCodes) {
+    }
 }

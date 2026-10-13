@@ -12,4 +12,8 @@ public interface SecretaryProfileRepository {
     Optional<SecretaryProfile> findByUserId(Long userId);
 
     List<SecretaryProfile> findBySupervisedPractitionerId(Long practitionerUserId);
+
+    default List<SecretaryProfile> findByAccessibleEstablishmentId(Long establishmentUserId) {
+        return List.of();
+    }
 }

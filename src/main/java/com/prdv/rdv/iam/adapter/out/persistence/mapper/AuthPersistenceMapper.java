@@ -1,6 +1,7 @@
 package com.prdv.rdv.iam.adapter.out.persistence.mapper;
 
 import com.prdv.rdv.iam.adapter.out.persistence.entity.AuditLogEntity;
+import com.prdv.rdv.iam.adapter.out.persistence.entity.BiometricCredentialEntity;
 import com.prdv.rdv.iam.adapter.out.persistence.entity.DelegationEntity;
 import com.prdv.rdv.iam.adapter.out.persistence.entity.GeoLocationEmbeddable;
 import com.prdv.rdv.iam.adapter.out.persistence.entity.OtpChallengeEntity;
@@ -8,6 +9,7 @@ import com.prdv.rdv.iam.adapter.out.persistence.entity.RefreshTokenEntity;
 import com.prdv.rdv.iam.adapter.out.persistence.entity.SocialAccountEntity;
 import com.prdv.rdv.iam.adapter.out.persistence.entity.UserSessionEntity;
 import com.prdv.rdv.iam.domain.model.audit.AuditLog;
+import com.prdv.rdv.iam.domain.model.auth.BiometricCredential;
 import com.prdv.rdv.iam.domain.model.auth.Delegation;
 import com.prdv.rdv.iam.domain.model.auth.OtpChallenge;
 import com.prdv.rdv.iam.domain.model.auth.RefreshToken;
@@ -194,6 +196,39 @@ public class AuthPersistenceMapper {
         d.setDetail(e.getDetail());
         d.setIpAddress(e.getIpAddress());
         d.setCreatedAt(e.getCreatedAt());
+        return d;
+    }
+
+    // ------------------------------------------------------------- Biometrie
+    public BiometricCredentialEntity toEntity(BiometricCredential d) {
+        BiometricCredentialEntity e = new BiometricCredentialEntity();
+        e.setId(d.getId());
+        e.setUserId(d.getUserId());
+        e.setCredentialId(d.getCredentialId());
+        e.setPublicKey(d.getPublicKey());
+        e.setModality(d.getModality());
+        e.setDeviceName(d.getDeviceName());
+        e.setSignCount(d.getSignCount());
+        e.setRevoked(d.isRevoked());
+        e.setCreatedAt(d.getCreatedAt());
+        e.setLastUsedAt(d.getLastUsedAt());
+        e.setRevokedAt(d.getRevokedAt());
+        return e;
+    }
+
+    public BiometricCredential toDomain(BiometricCredentialEntity e) {
+        BiometricCredential d = new BiometricCredential();
+        d.setId(e.getId());
+        d.setUserId(e.getUserId());
+        d.setCredentialId(e.getCredentialId());
+        d.setPublicKey(e.getPublicKey());
+        d.setModality(e.getModality());
+        d.setDeviceName(e.getDeviceName());
+        d.setSignCount(e.getSignCount());
+        d.setRevoked(e.isRevoked());
+        d.setCreatedAt(e.getCreatedAt());
+        d.setLastUsedAt(e.getLastUsedAt());
+        d.setRevokedAt(e.getRevokedAt());
         return d;
     }
 }
