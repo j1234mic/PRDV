@@ -1,5 +1,7 @@
 package com.prdv.rdv.iam.application.port.output;
 
+import com.prdv.rdv.iam.application.result.Views;
+
 import java.util.List;
 
 /**
@@ -14,7 +16,7 @@ public interface WafDdosProtectionPort {
 
     long blockedWafRequestsCount();
 
-    List<String> recentWafEvents();
+    List<Views.WafEventView> recentWafEvents();
 
     List<String> blockedIpAddresses();
 

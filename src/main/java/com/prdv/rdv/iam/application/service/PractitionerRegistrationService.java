@@ -34,6 +34,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -216,6 +217,9 @@ public class PractitionerRegistrationService implements PractitionerRegistration
     public Views.PractitionerInsuranceView verifyInsurance(ProfileCommands.VerifyInsurance command) {
         Long userId = securityContext.requireCurrentUserId();
         PractitionerProfile profile = requireProfile(userId);
+        String insuranceCompany = command.company();
+        String policyNumber = command.policyNumber();
+        LocalDate expiresAt = command.expiresAt();
         if (insuranceVerification != null) {
             InsuranceVerificationPort.InsuranceCheck check = insuranceVerification.verify(
                     command.company(), command.policyNumber(), command.expiresAt(),
@@ -224,8 +228,11 @@ public class PractitionerRegistrationService implements PractitionerRegistration
                 throw IamException.of(IamErrorCode.VALIDATION_ERROR,
                         "Assurance RC Pro refusee : " + check.reason());
             }
+            insuranceCompany = check.insuranceCompany();
+            policyNumber = check.insurancePolicyNumber();
+            expiresAt = check.expiresAt();
         }
-        profile.recordVerifiedInsurance(command.company(), command.policyNumber(), command.expiresAt(), clock);
+        profile.recordVerifiedInsurance(insuranceCompany, policyNumber, expiresAt, clock);
         PractitionerProfile saved = profileRepository.save(profile);
         auditLogger.success(userId, AuditLog.Action.INSURANCE_VERIFIED,
                 "RC Pro verifiee : " + saved.getInsuranceCompany() + " #" + saved.getInsurancePolicyNumber());

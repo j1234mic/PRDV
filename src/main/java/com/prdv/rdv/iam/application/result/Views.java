@@ -34,6 +34,9 @@ public final class Views {
     public record PatientView(UserView user, String firstName, String lastName, LocalDate birthDate,
                               PatientProfile.Gender gender, Long guardianUserId,
                               PatientProfile.KycLevel kycLevel, String importedFrom) {
+        public boolean minor() {
+            return guardianUserId != null;
+        }
     }
 
     public record PatientKycStatusView(Long userId,
@@ -160,6 +163,16 @@ public final class Views {
                                      int accountAgeYears) {
     }
 
+    /** Statistiques agregees : aucune donnee personnelle n'est exposee. */
+    public record AnalyticsSummary(long totalUsers,
+                                   Map<ProfileType, Long> byProfileType,
+                                   Map<AccountStatus, Long> byStatus) {
+        public AnalyticsSummary {
+            byProfileType = Map.copyOf(byProfileType);
+            byStatus = Map.copyOf(byStatus);
+        }
+    }
+
     public record E2eePublicKeyView(Long id,
                                     Long userId,
                                     String keyId,
@@ -219,11 +232,22 @@ public final class Views {
                                       Map<String, String> rewardsBySeverity) {
     }
 
+    public record WafEventView(String ipAddress,
+                                String method,
+                                String uri,
+                                String matchedRule,
+                                Instant occurredAt) {
+    }
+
     public record WafDdosStatusView(boolean wafEnabled,
                                     int activeWafRulesCount,
                                     long blockedWafRequestsCount,
-                                    List<String> recentWafEvents,
+                                    List<WafEventView> recentWafEvents,
                                     List<String> blockedIpAddresses) {
+        /** Alias conserve pour les appelants historiques du statut WAF. */
+        public List<String> blockedIps() {
+            return blockedIpAddresses;
+        }
     }
 
     public record ImportSummary(String sourcePlatform, int fieldsUpdated, List<String> updatedFields) {

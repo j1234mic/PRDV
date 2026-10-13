@@ -10,6 +10,10 @@ public interface InsuranceVerificationPort {
 
     InsuranceCheck verify(String company, String policyNumber, LocalDate expiresAt, String practitionerName);
 
-    record InsuranceCheck(boolean valid, String provider, String reference, String reason) {
+    record InsuranceCheck(boolean valid,
+                          String insuranceCompany,
+                          String insurancePolicyNumber,
+                          LocalDate expiresAt,
+                          String reason) {
     }
 }

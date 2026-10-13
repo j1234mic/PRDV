@@ -1,6 +1,7 @@
 package com.prdv.rdv.iam.adapter.out.external;
 
 import com.prdv.rdv.iam.application.port.output.InsuranceVerificationPort;
+import com.prdv.rdv.iam.application.port.output.InsuranceVerificationPort.InsuranceCheck;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -23,25 +24,25 @@ public class StubInsuranceVerificationAdapter implements InsuranceVerificationPo
     }
 
     @Override
-    public InsuranceVerification verify(String insuranceCompany,
-                                        String policyNumber,
-                                        LocalDate expiresAt,
-                                        String rppsOrAdeli) {
+    public InsuranceCheck verify(String insuranceCompany,
+                                 String policyNumber,
+                                 LocalDate expiresAt,
+                                 String practitionerName) {
         if (insuranceCompany == null || insuranceCompany.isBlank()) {
-            return new InsuranceVerification(false, null, policyNumber, expiresAt,
+            return new InsuranceCheck(false, null, policyNumber, expiresAt,
                     "Compagnie d'assurance RC Pro manquante");
         }
         if (policyNumber == null || !POLICY_PATTERN.matcher(policyNumber.trim()).matches()) {
-            return new InsuranceVerification(false, insuranceCompany.trim(), policyNumber, expiresAt,
+            return new InsuranceCheck(false, insuranceCompany.trim(), policyNumber, expiresAt,
                     "Numero de police d'assurance RC Pro invalide (6 a 40 caracteres alphanumeriques)");
         }
         LocalDate today = LocalDate.now(clock);
         if (expiresAt != null && expiresAt.isBefore(today)) {
-            return new InsuranceVerification(false, insuranceCompany.trim(), policyNumber.trim(), expiresAt,
+            return new InsuranceCheck(false, insuranceCompany.trim(), policyNumber.trim(), expiresAt,
                     "Attestation d'assurance RC Pro expiree le " + expiresAt);
         }
         LocalDate effectiveExpiry = expiresAt != null ? expiresAt : today.plusYears(1);
-        return new InsuranceVerification(
+        return new InsuranceCheck(
                 true,
                 insuranceCompany.trim(),
                 policyNumber.trim().toUpperCase(),

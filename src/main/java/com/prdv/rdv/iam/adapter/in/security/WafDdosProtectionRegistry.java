@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -111,10 +110,10 @@ public class WafDdosProtectionRegistry implements WafDdosProtectionPort {
     }
 
     @Override
-    public Set<String> blockedIpAddresses() {
+    public List<String> blockedIpAddresses() {
         Instant now = clock.instant();
         blockedIps.entrySet().removeIf(entry -> now.isAfter(entry.getValue()));
-        return new TreeSet<>(blockedIps.keySet());
+        return new ArrayList<>(new TreeSet<>(blockedIps.keySet()));
     }
 
     @Override

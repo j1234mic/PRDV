@@ -229,6 +229,6 @@ public class AdminController {
     @PreAuthorize("hasAuthority('iam.analytics.read')")
     @Operation(summary = "Synthese statistique anonymisee des comptes par profil et statut")
     public Views.AnalyticsSummary analyticsSummary() {
-        return userUseCase.anonymizedAnalytics();
+        return analyticsUseCase.analyticsSummary();
     }
 }
