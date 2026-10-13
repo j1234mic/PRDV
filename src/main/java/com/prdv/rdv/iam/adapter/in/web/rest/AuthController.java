@@ -159,12 +159,13 @@ public class AuthController {
     public AuthResults.AuthResult enterpriseSsoLogin(
             @Valid @RequestBody AuthDtos.EnterpriseSsoLoginRequest request,
             HttpServletRequest httpRequest) {
-        return socialAuthenticationUseCase.authenticateEnterpriseSso(
-                new AuthCommands.EnterpriseSsoLogin(
-                        request.tenantDomain(), request.externalSubject(),
-                        request.email(), request.firstName(), request.lastName(),
-                        request.targetProfileType(),
-                        httpRequestMetadata.from(httpRequest)));
+        return AuthResults.AuthResult.authenticated(
+                socialAuthenticationUseCase.authenticateEnterpriseSso(
+                        new AuthCommands.EnterpriseSsoLogin(
+                                request.tenantDomain(), request.externalSubject(),
+                                request.email(), request.firstName(), request.lastName(),
+                                request.targetProfileType(),
+                                httpRequestMetadata.from(httpRequest))));
     }
 
     @PostMapping("/refresh")
