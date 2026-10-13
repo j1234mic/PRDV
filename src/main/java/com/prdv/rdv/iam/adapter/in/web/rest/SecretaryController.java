@@ -36,7 +36,7 @@ public class SecretaryController {
     @GetMapping("/me")
     @PreAuthorize("hasAuthority('iam.user.read')")
     @Operation(summary = "Consulter son profil secretaire medicale (medecins rattaches et cabinets autorises)")
-    public Views.SecretaryView me() {
+    public Views.SecretaryDetailView me() {
         return secretaryUseCase.currentProfile();
     }
 
@@ -53,7 +53,7 @@ public class SecretaryController {
     @PutMapping("/{userId}/permissions")
     @PreAuthorize("hasAuthority('iam.secretary.register')")
     @Operation(summary = "Modifier les droits granulaires d'une secretaire medicale")
-    public Views.SecretaryView updatePermissions(
+    public Views.SecretaryDetailView updatePermissions(
             @PathVariable Long userId,
             @Valid @RequestBody SecretaryDtos.UpdateSecretaryPermissionsRequest request) {
         return secretaryUseCase.updatePermissions(
@@ -63,7 +63,7 @@ public class SecretaryController {
     @PutMapping("/{userId}/assignments")
     @PreAuthorize("hasAuthority('iam.secretary.register')")
     @Operation(summary = "Modifier les medecins rattaches et les acces multi-cabinets d'une secretaire")
-    public Views.SecretaryView updateAssignments(
+    public Views.SecretaryDetailView updateAssignments(
             @PathVariable Long userId,
             @Valid @RequestBody SecretaryDtos.UpdateSecretaryAssignmentsRequest request) {
         return secretaryUseCase.updateAssignments(

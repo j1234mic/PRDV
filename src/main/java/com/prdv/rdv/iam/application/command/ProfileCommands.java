@@ -34,6 +34,16 @@ public final class ProfileCommands {
                                     LocalDate validUntil) {
     }
 
+    /**
+     * Designation par un praticien rattache a l'etablissement d'un autre praticien comme
+     * remplacant sur une plage donnee (membership REPLACER, en attente de validation).
+     */
+    public record DesignateReplacer(Long establishmentUserId,
+                                    Long replacerPractitionerUserId,
+                                    LocalDate validFrom,
+                                    LocalDate validUntil) {
+    }
+
     /** Rattachement d'un remplaçant sur une plage donnee (= membership REPLACER). */
     public record DeclareReplacement(Long establishmentUserId,
                                      LocalDate validFrom,
@@ -68,12 +78,17 @@ public final class ProfileCommands {
     public record UpdateDepartments(List<String> departments) {
     }
 
-    /** Emission d'une facture groupee pour un etablissement multi-praticiens. */
+    /**
+     * Emission d'une facture groupee pour un etablissement multi-praticiens.
+     * {@code platformFeeRatePercent} : commission de la plateforme en pourcentage (0 a 100) ;
+     * {@code null} applique le taux par defaut.
+     */
     public record IssueGroupInvoice(LocalDate periodStart,
                                     LocalDate periodEnd,
                                     String department,
                                     Set<Long> practitionerUserIds,
                                     int consultationsCount,
-                                    long totalAmountCents) {
+                                    long totalAmountCents,
+                                    Integer platformFeeRatePercent) {
     }
 }

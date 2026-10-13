@@ -118,7 +118,7 @@ public class AdminController {
     @Operation(summary = "Modifier un role personnalise")
     public Views.RoleView updateRole(@PathVariable String name,
                                      @Valid @RequestBody AdminDtos.UpdateRoleRequest request) {
-        return roleUseCase.updateRole(new AdminCommands.UpdateCustomRole(
+        return roleUseCase.updateRole(new AdminCommands.UpdateRole(
                 name, request.description(), request.permissionCodes()));
     }
 
@@ -198,8 +198,9 @@ public class AdminController {
     @PostMapping("/users/{userId}/revoke-tokens")
     @PreAuthorize("hasAuthority('iam.user.update')")
     @Operation(summary = "Revocation instantanee de tous les jetons JWT et sessions d'un utilisateur")
-    public Views.UserView revokeUserTokens(@PathVariable Long userId) {
-        return userUseCase.revokeUserTokens(userId);
+    public ResponseEntity<Void> revokeUserTokens(@PathVariable Long userId) {
+        userUseCase.revokeUserTokens(userId);
+        return ResponseEntity.noContent().build();
     }
 
     // ----------------------------------------------------------------- Audit

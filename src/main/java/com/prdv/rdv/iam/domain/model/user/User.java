@@ -139,6 +139,16 @@ public class User {
         this.updatedAt = clock.instant();
     }
 
+    /** Deverrouillage administratif : leve le verrou sans modifier la date de derniere connexion. */
+    public void unlock(Clock clock) {
+        this.failedAttempts = 0;
+        this.lockedUntil = null;
+        if (this.status == AccountStatus.LOCKED) {
+            this.status = AccountStatus.ACTIVE;
+        }
+        this.updatedAt = clock.instant();
+    }
+
     public void resetFailedLogins(Clock clock) {
         this.failedAttempts = 0;
         this.lockedUntil = null;

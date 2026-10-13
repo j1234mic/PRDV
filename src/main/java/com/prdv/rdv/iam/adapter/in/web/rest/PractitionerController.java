@@ -79,9 +79,9 @@ public class PractitionerController {
     @PostMapping("/me/insurance")
     @PreAuthorize("hasAuthority('iam.practitioner.read')")
     @Operation(summary = "Verifier et enregistrer son assurance Responsabilite Civile Professionnelle (RC Pro)")
-    public Views.PractitionerView verifyInsurance(
+    public Views.PractitionerInsuranceView verifyInsurance(
             @Valid @RequestBody PractitionerDtos.VerifyInsuranceRequest request) {
-        return practitionerUseCase.verifyInsurance(new ProfileCommands.VerifyPractitionerInsurance(
+        return practitionerUseCase.verifyInsurance(new ProfileCommands.VerifyInsurance(
                 request.insuranceCompany(), request.policyNumber(), request.expiresAt()));
     }
 
@@ -91,7 +91,7 @@ public class PractitionerController {
     public Views.PractitionerView updateBankAccount(
             @Valid @RequestBody PractitionerDtos.UpdateBankAccountRequest request) {
         return practitionerUseCase.updateBankAccount(
-                new ProfileCommands.UpdatePractitionerBankAccount(request.iban()));
+                new ProfileCommands.UpdateBankAccount(request.iban()));
     }
 
     @PostMapping("/me/contract")
@@ -163,9 +163,9 @@ public class PractitionerController {
     @PostMapping("/secretaries")
     @PreAuthorize("hasAuthority('iam.secretary.register')")
     @Operation(summary = "Creer un compte secretaire medicale rattache (mono ou multi-cabinets)")
-    public Views.SecretaryView createSecretary(@Valid @RequestBody SecretaryDtos.RegisterSecretaryRequest request) {
+    public Views.SecretaryDetailView createSecretary(@Valid @RequestBody SecretaryDtos.RegisterSecretaryRequest request) {
         return secretaryUseCase.createWithMultiCabinet(
-                new RegistrationCommands.RegisterSecretaryWithEstablishments(
+                new RegistrationCommands.RegisterSecretaryMultiCabinet(
                         request.email(), request.firstName(), request.lastName(),
                         request.supervisedPractitionerIds(),
                         request.accessibleEstablishmentIds(),

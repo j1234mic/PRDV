@@ -58,7 +58,7 @@ public class EstablishmentController {
     public Views.EstablishmentView updateDepartments(
             @Valid @RequestBody EstablishmentDtos.UpdateDepartmentsRequest request) {
         return establishmentUseCase.updateDepartments(
-                new ProfileCommands.UpdateEstablishmentDepartments(request.departments()));
+                new ProfileCommands.UpdateDepartments(request.departments()));
     }
 
     @GetMapping("/me/memberships")

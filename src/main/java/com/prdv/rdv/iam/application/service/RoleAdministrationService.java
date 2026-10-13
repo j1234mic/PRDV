@@ -77,6 +77,16 @@ public class RoleAdministrationService implements RoleAdministrationUseCase {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<Views.PermissionView> listPermissionsByModule(String module) {
+        String wanted = module == null ? "" : module.trim();
+        return permissionRepository.findAll().stream()
+                .filter(p -> p.getModule() != null && p.getModule().equalsIgnoreCase(wanted))
+                .map(viewMapper::permissionView)
+                .toList();
+    }
+
+    @Override
     @Transactional
     public void assignRoles(AdminCommands.AssignRoles command) {
         User user = userRepository.findById(command.userId())
