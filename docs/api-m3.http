@@ -5,7 +5,7 @@
 @doctorToken = REPLACE_WITH_DOCTOR_JWT
 @patientToken = REPLACE_WITH_PATIENT_JWT
 
-### Ouvrir mon agenda
+### Ouvrir mon agenda (idempotent ; les GET rules/slots/settings l'initialisent aussi)
 POST {{base}}/agenda
 Authorization: Bearer {{doctorToken}}
 
@@ -20,7 +20,7 @@ Content-Type: application/json
 
 [{"id":"6f1c2b90-6d0e-4a5b-9c3d-2b8f0a1e7d55","site":"{{site}}","start":"2026-11-02T09:00:00Z","end":"2026-11-02T09:30:00Z","type":"NORMAL","audience":"ALL"}]
 
-### Lister mes créneaux (lecture seule, sans verrou d'écriture)
+### Lister mes créneaux (initialise l'agenda vide à la première lecture)
 GET {{base}}/agenda/slots
 Authorization: Bearer {{doctorToken}}
 

@@ -39,7 +39,18 @@ public class PlanningService implements PlanningUseCase {
     public void declineOffer(Long practitioner,UUID offer) {
         mutate(practitioner,a -> a.declineOffer(offer,actor.userId()));
     }
-    public AgendaSettings settings() { return store.read(actor.userId()).settings(); }
+    public AgendaSettings settings() { return ownAgenda().settings(); }
+    private Agenda ownAgenda() {
+        Long practitioner=actor.userId();
+        try {
+            return store.read(practitioner);
+        } catch (PlanningException missing) {
+            if (missing.code()!=Code.NOT_FOUND) throw missing;
+            // Keep normal reads lock-free; only the first read provisions the empty agenda.
+            store.ensureExists(practitioner);
+            return store.read(practitioner);
+        }
+    }
     public void saveTemplate(String name,SchedulePattern pattern) {
         sites.requireOwned(actor.userId(),pattern.site());
         mutate(actor.userId(),a -> a.withSettings(a.settings().template(name,pattern)));
@@ -87,9 +98,9 @@ public class PlanningService implements PlanningUseCase {
         Agenda.Appointment appointment=a.appointment(id);
         return new AppointmentDetails(appointment,a.slot(appointment.slotId()));
     }
-    public Agenda.Rules rules() { return store.read(actor.userId()).rules(); }
-    public List<Agenda.Slot> slots() { return store.read(actor.userId()).slots(); }
-    public void open() { store.create(actor.userId()); }
+    public Agenda.Rules rules() { return ownAgenda().rules(); }
+    public List<Agenda.Slot> slots() { return ownAgenda().slots(); }
+    public boolean open() { return store.ensureExists(actor.userId()); }
     public Agenda configure(Agenda.Rules rules) { return mutate(actor.userId(), a -> a.configure(rules)); }
     public Agenda add(List<Agenda.Slot> slots) {
         require(slots!=null,Code.INVALID,"Creneaux requis");

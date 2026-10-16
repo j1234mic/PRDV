@@ -40,6 +40,19 @@ class JpaAgendaStoreTest {
         })).isInstanceOf(PlanningException.class);
         assertThat(store.read(901L).appointments()).isEmpty();
     }
+    @Test void ensureExistsCreatesDefaultAgendaOnlyOnce() {
+        assertThat(store.ensureExists(908L)).isTrue();
+        assertThat(store.read(908L).rules()).isEqualTo(Agenda.Rules.defaults());
+        assertThat(store.read(908L).slots()).isEmpty();
+        long auditCount=audits.count();
+
+        assertThat(store.ensureExists(908L)).isFalse();
+
+        assertThat(audits.count()).isEqualTo(auditCount);
+        assertThatThrownBy(() -> store.create(908L))
+                .isInstanceOf(PlanningException.class)
+                .hasMessageContaining("Agenda deja ouvert");
+    }
     @Test void concurrentReservationsHaveOneWinner() throws Exception {
         store.create(902L);
         Instant now=Instant.parse("2026-10-16T08:00:00Z");

@@ -5,7 +5,8 @@ import java.time.*;
 import java.util.*;
 
 public interface PlanningUseCase {
-    void open();
+    /** Opens this practitioner's agenda; returns true only when it was newly created. */
+    boolean open();
     Agenda importCalendar(String content,String site);
     List<com.prdv.rdv.planning.domain.WaitingOffer> offers(Long practitioner);
     Agenda.Appointment acceptOffer(Long practitioner,UUID offer,Agenda.Intake intake);

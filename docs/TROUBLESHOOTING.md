@@ -638,7 +638,7 @@ Content-Type: application/json
 | `type` ∈ `NORMAL, FIRST_VISIT, FOLLOW_UP, EMERGENCY, TELECONSULTATION, HOME_VISIT, TECHNICAL_ACT, MEETING, ADMINISTRATIVE, ABSENCE` ; `audience` ∈ `ALL, NEW_PATIENTS, KNOWN_PATIENTS` (majuscules) | 400 `VALIDATION_ERROR` |
 | Aucun chevauchement avec les créneaux existants (marge de trajet inter-sites comprise) | 409 `PLANNING_CONFLICT` « Chevauchement ou trajet insuffisant » |
 | Rôle `PRACTITIONER` sur le JWT | 403 `FORBIDDEN` |
-| Agenda ouvert au préalable : `POST /api/v1/planning/agenda` | 404 `PLANNING_NOT_FOUND` « Agenda introuvable » |
+| Agenda non initialisé : `GET /agenda/rules`, `GET /agenda/slots` et `GET /agenda/settings` initialisent automatiquement un agenda vide pour le praticien authentifié. `POST /api/v1/planning/agenda` reste disponible et est idempotent (201 à la création, 200 si l'agenda existe déjà). Une mutation envoyée avant toute initialisation reçoit encore 404 `PLANNING_NOT_FOUND` « Agenda introuvable ». |
 
 Un `POST` dupliqué par le frontend (double invocation d'effet React en `StrictMode`,
 retry automatique) n'aboutit pas à un 500 : le second appel échoue en 409

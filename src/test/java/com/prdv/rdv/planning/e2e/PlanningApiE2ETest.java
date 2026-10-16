@@ -95,6 +95,28 @@ class PlanningApiE2ETest {
         assertThat(request(secondToken,HttpMethod.POST,root+"/notifications/"+notification+"/read",null).getStatusCode().value()).isEqualTo(200);
         assertThat(request(doctorToken,HttpMethod.GET,root+"/agenda/audit",null).getBody().size()).isGreaterThan(0);
     }
+    @Test void firstOwnerReadInitializesAnEmptyAgenda() {
+        User doctor=user(Role.PRACTITIONER,ProfileType.PRACTITIONER);
+        String doctorToken=token(doctor),root="/api/v1/planning";
+
+        var rules=request(doctorToken,HttpMethod.GET,root+"/agenda/rules",null);
+        assertThat(rules.getStatusCode().value()).isEqualTo(200);
+        assertThat(rules.getBody().get("defaultMinutes").asInt()).isEqualTo(30);
+
+        var slots=request(doctorToken,HttpMethod.GET,root+"/agenda/slots",null);
+        assertThat(slots.getStatusCode().value()).isEqualTo(200);
+        assertThat(slots.getBody().size()).isZero();
+        assertThat(request(doctorToken,HttpMethod.GET,root+"/agenda/settings",null).getStatusCode().value()).isEqualTo(200);
+        // Opening explicitly after a lazy read is safe and reports that the agenda already existed.
+        assertThat(request(doctorToken,HttpMethod.POST,root+"/agenda",null).getStatusCode().value()).isEqualTo(200);
+
+        var location=locations.save(com.prdv.rdv.profile.domain.model.practitioner.PracticeLocation.create(
+                doctor.getId(),"Cabinet","Rue de test","101","Antananarivo","MG",true,clock));
+        Instant start=clock.instant().plusSeconds(86400);
+        Agenda.Slot slot=new Agenda.Slot(UUID.randomUUID(),location.getId(),start,start.plusSeconds(1800),
+                Agenda.Type.NORMAL,Agenda.Audience.ALL);
+        assertThat(request(doctorToken,HttpMethod.POST,root+"/agenda/slots",List.of(slot)).getStatusCode().value()).isEqualTo(200);
+    }
     /**
      * Contrat exact de {@code POST /api/v1/planning/agenda/slots} pour le frontend :
      * les erreurs attendues (agenda non ouvert, lieu inconnu, lieu d'un autre praticien,

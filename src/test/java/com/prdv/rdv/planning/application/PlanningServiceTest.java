@@ -17,6 +17,11 @@ class PlanningServiceTest {
         Agenda state=Agenda.empty(1L).addSlots(List.of(slot),now).book(slot.id(),2L,intake,false,now);
         public List<Long> practitioners(int page,int size) { return page==0 ? List.of(1L) : List.of(); }
         public void create(Long id) { state=Agenda.empty(id); }
+        public boolean ensureExists(Long id) {
+            if (state!=null && state.practitionerId().equals(id)) return false;
+            state=Agenda.empty(id);
+            return true;
+        }
         public Agenda read(Long id) { return state; }
         public Agenda update(Long id, UnaryOperator<Agenda> fn) { state=fn.apply(state); return state; }
     }

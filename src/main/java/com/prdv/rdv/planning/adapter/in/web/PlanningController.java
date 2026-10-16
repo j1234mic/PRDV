@@ -17,8 +17,11 @@ public class PlanningController {
     public PlanningController(PlanningUseCase planning) { this.planning=planning; }
     @PostMapping("/agenda")
     @PreAuthorize("hasRole('PRACTITIONER')")
-    @ResponseStatus(org.springframework.http.HttpStatus.CREATED)
-    public void open() { planning.open(); }
+    public org.springframework.http.ResponseEntity<Void> open() {
+        return planning.open()
+                ? org.springframework.http.ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).build()
+                : org.springframework.http.ResponseEntity.ok().build();
+    }
     @GetMapping("/agenda/rules")
     @PreAuthorize("hasRole('PRACTITIONER')")
     public Agenda.Rules rules() { return planning.rules(); }
