@@ -25,6 +25,20 @@ public class JpaAgendaStore implements AgendaStore {
     public void create(Long id) {
         coordinator.lock();
         if (repository.existsById(id)) throw new PlanningException(PlanningException.Code.CONFLICT,"Agenda deja ouvert");
+        persistInitialAgenda(id);
+    }
+    /**
+     * Lazily provisions an empty agenda for owner-facing reads. The global planning lock
+     * makes the existence check and insert atomic across concurrent requests/instances.
+     */
+    @Transactional
+    public boolean ensureExists(Long id) {
+        coordinator.lock();
+        if (repository.existsById(id)) return false;
+        persistInitialAgenda(id);
+        return true;
+    }
+    private void persistInitialAgenda(Long id) {
         try {
             Agenda initial=Agenda.empty(id);
             repository.saveAndFlush(new AgendaEntity(id,encode(id,initial)));
