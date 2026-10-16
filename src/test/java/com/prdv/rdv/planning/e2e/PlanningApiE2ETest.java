@@ -95,6 +95,66 @@ class PlanningApiE2ETest {
         assertThat(request(secondToken,HttpMethod.POST,root+"/notifications/"+notification+"/read",null).getStatusCode().value()).isEqualTo(200);
         assertThat(request(doctorToken,HttpMethod.GET,root+"/agenda/audit",null).getBody().size()).isGreaterThan(0);
     }
+    /**
+     * Contrat exact de {@code POST /api/v1/planning/agenda/slots} pour le frontend :
+     * les erreurs attendues (agenda non ouvert, lieu inconnu, lieu d'un autre praticien,
+     * creneau passe) doivent produire un statut fonctionnel explicite, jamais un
+     * 500 INTERNAL_ERROR muet.
+     */
+    @Test void slotCreationReportsFrontendMistakesWithExplicitStatuses() {
+        User doctor=user(Role.PRACTITIONER,ProfileType.PRACTITIONER);
+        User colleague=user(Role.PRACTITIONER,ProfileType.PRACTITIONER);
+        String doctorToken=token(doctor);
+        String root="/api/v1/planning";
+        Instant start=clock.instant().plusSeconds(172800);
+        var location=locations.save(com.prdv.rdv.profile.domain.model.practitioner.PracticeLocation.create(
+                doctor.getId(),"Cabinet","Rue de test","101","Antananarivo","MG",true,clock));
+        var foreignSite=locations.save(com.prdv.rdv.profile.domain.model.practitioner.PracticeLocation.create(
+                colleague.getId(),"Cabinet confrere","Rue de test","102","Antananarivo","MG",true,clock));
+        Map<String,Object> slot=new LinkedHashMap<>();
+        slot.put("id",UUID.randomUUID()); slot.put("site",location.getId()); slot.put("start",start);
+        slot.put("end",start.plusSeconds(1800)); slot.put("type","NORMAL"); slot.put("audience","ALL");
+
+        // Agenda jamais ouvert : le store ne trouve aucun agenda a mettre a jour.
+        var notOpened=request(doctorToken,HttpMethod.POST,root+"/agenda/slots",List.of(slot));
+        assertThat(notOpened.getStatusCode().value()).isEqualTo(404);
+        assertThat(notOpened.getBody().get("code").asText()).isEqualTo("PLANNING_NOT_FOUND");
+        assertThat(request(doctorToken,HttpMethod.POST,root+"/agenda",null).getStatusCode().value()).isEqualTo(201);
+
+        // site = IDENTIFIANT du lieu d'exercice (pas son libelle).
+        slot.put("site","Cabinet");
+        var unknownSite=request(doctorToken,HttpMethod.POST,root+"/agenda/slots",List.of(slot));
+        assertThat(unknownSite.getStatusCode().value()).isEqualTo(400);
+        assertThat(unknownSite.getBody().get("code").asText()).isEqualTo("PLANNING_INVALID");
+        assertThat(unknownSite.getBody().get("message").asText()).contains("Lieu d'exercice");
+
+        // Lieu existant mais appartenant a un autre praticien.
+        slot.put("site",foreignSite.getId());
+        assertThat(request(doctorToken,HttpMethod.POST,root+"/agenda/slots",List.of(slot)).getStatusCode().value()).isEqualTo(403);
+
+        // Creneau dans le passe.
+        slot.put("site",location.getId());
+        slot.put("start",clock.instant().minusSeconds(7200)); slot.put("end",clock.instant().minusSeconds(3600));
+        var past=request(doctorToken,HttpMethod.POST,root+"/agenda/slots",List.of(slot));
+        assertThat(past.getStatusCode().value()).isEqualTo(400);
+        assertThat(past.getBody().get("message").asText()).contains("passe");
+
+        // Corps non tableau / champ manquant : erreur de lecture JSON, pas un 500.
+        assertThat(request(doctorToken,HttpMethod.POST,root+"/agenda/slots",Map.of("slots",List.of(slot)))
+                .getStatusCode().value()).isEqualTo(400);
+        Map<String,Object> withoutId=new LinkedHashMap<>(slot);
+        withoutId.remove("id"); withoutId.put("start",start); withoutId.put("end",start.plusSeconds(1800));
+        assertThat(request(doctorToken,HttpMethod.POST,root+"/agenda/slots",List.of(withoutId))
+                .getStatusCode().value()).isEqualTo(400);
+
+        // Contrat nominal : creneau futur, lieu possede, UUID fourni par le client.
+        slot.put("start",start); slot.put("end",start.plusSeconds(1800));
+        assertThat(request(doctorToken,HttpMethod.POST,root+"/agenda/slots",List.of(slot)).getStatusCode().value()).isEqualTo(200);
+        var created=request(doctorToken,HttpMethod.GET,root+"/agenda/slots",null).getBody();
+        assertThat(created.size()).isEqualTo(1);
+        assertThat(created.get(0).get("id").asText()).isEqualTo(slot.get("id").toString());
+        assertThat(created.get(0).get("site").asText()).isEqualTo(location.getId());
+    }
     private User user(String role,ProfileType type) {
         User u=User.register(Email.of("planning-"+UUID.randomUUID()+"@prdv.test"),null,"hash",type,clock);
         u.markEmailVerified(); u.setStatus(AccountStatus.ACTIVE);

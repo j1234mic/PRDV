@@ -223,6 +223,24 @@ Un `DatabaseConnectionFailureAnalyzer` affiche désormais un message d'aide dire
 au démarrage en cas d'échec de connexion (MySQL injoignable, URL H2 invalide, fichier
 H2 verrouillé).
 
+### Dépannage — `500 INTERNAL_ERROR` sur une écriture du planning
+
+Un `500 {"code":"INTERNAL_ERROR","message":"Une erreur interne est survenue"}` (par
+exemple sur `POST /api/v1/planning/agenda/slots`) est désormais **toujours** journalisé
+côté serveur avec sa stack trace : cherchez la ligne
+
+```
+ERROR c.p.r.common.web.GlobalExceptionHandler : POST /api/v1/planning/agenda/slots -> <classe> : <message>
+```
+
+Les pannes de dépendance ne renvoient plus un 500 muet mais un statut actionnable :
+`409 CONCURRENT_UPDATE` (verrou d'écriture tenu par une autre opération, rejouable),
+`409 DATA_CONFLICT` (contrainte SQL), `503 DATABASE_UNAVAILABLE` (base injoignable),
+`500 APPLICATION_STATE_ERROR` (agrégat illisible, verrou absent — message détaillé).
+La checklist de diagnostic et le contrat exact du corps de requête (tableau de créneaux,
+`site` = **identifiant** du lieu d'exercice, instants ISO-8601 avec fuseau) sont dans
+[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) et [docs/api-m3.http](docs/api-m3.http).
+
 Swagger UI : <http://localhost:8080/swagger-ui.html>
 
 Au démarrage, le catalogue de permissions, les rôles systèmes et un compte

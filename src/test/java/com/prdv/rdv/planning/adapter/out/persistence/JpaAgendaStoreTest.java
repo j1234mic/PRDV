@@ -25,6 +25,7 @@ class JpaAgendaStoreTest {
     }
     @Autowired JpaAgendaStore store;
     @Autowired ObjectMapper mapper;
+    @Autowired AgendaJpaRepository agendas;
     @Autowired PlanningNotificationRepository notifications;
     @Autowired PlanningAuditRepository audits;
     @Test void roundTripAndRollback() {
@@ -97,6 +98,22 @@ class JpaAgendaStoreTest {
         assertThat(released.settings().offers()).hasSize(1);
         assertThat(notifications.findByRecipientOrderByOccurredAtDescIdDesc(61L,org.springframework.data.domain.PageRequest.of(0,100)))
                 .anyMatch(n -> n.type.equals("WAITING_OFFER"));
+    }
+    /**
+     * Le controle anti double reservation inter-praticiens parcourt TOUS les agendas. Une
+     * charge utile illisible chez un autre praticien faisait auparavant echouer chaque
+     * ecriture du planning en {@code IllegalStateException}, soit un 500 INTERNAL_ERROR
+     * systemique (et muet) pour tous les utilisateurs.
+     */
+    @Test void unreadableNeighbouringAgendaDoesNotBlockWrites() {
+        store.create(906L);
+        agendas.saveAndFlush(new AgendaEntity(907L,"ceci n'est pas du JSON"));
+        try {
+            Instant now=Instant.parse("2026-10-16T08:00:00Z");
+            var slot=new Agenda.Slot(UUID.randomUUID(),"A",now.plusSeconds(7200),now.plusSeconds(9000),Agenda.Type.NORMAL,Agenda.Audience.ALL);
+            assertThatCode(() -> store.update(906L,a -> a.addSlots(List.of(slot),now))).doesNotThrowAnyException();
+            assertThat(store.read(906L).slots()).containsExactly(slot);
+        } finally { agendas.deleteById(907L); }
     }
     @Test void readsLegacyAggregateWithoutSettingsOrCancellationSnapshot() throws Exception {
         Instant now=Instant.parse("2026-10-16T08:00:00Z");

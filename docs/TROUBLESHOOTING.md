@@ -507,3 +507,150 @@ Content-Type: application/json
 }
 ```
 
+
+## `500 INTERNAL_ERROR` — « Une erreur interne est survenue » sur `POST /api/v1/planning/agenda/slots`
+
+**Réponse observée côté frontend :**
+
+```json
+{
+  "timestamp": "2026-10-16T13:22:37.472Z",
+  "status": 500,
+  "code": "INTERNAL_ERROR",
+  "message": "Une erreur interne est survenue",
+  "path": "/api/v1/planning/agenda/slots"
+}
+```
+
+### Cause racine du caractère « aveugle » de cette erreur
+
+Le handler de dernier recours de `GlobalExceptionHandler` renvoyait ce corps **sans
+journaliser l'exception** : la cause réelle (classe, message, stack trace) n'apparaissait
+nulle part, ni côté serveur ni côté client. Toute panne d'infrastructure sur le chemin
+d'écriture du planning se transformait donc en 500 muet.
+
+Ce chemin est le suivant :
+
+```
+PlanningController.add
+  → PlanningService.add            (1) contrôle du lieu d'exercice
+  → JpaAgendaStore.update          (2) verrou global + lecture/écriture de l'agrégat
+      → PlanningCoordinator.lock   (3) verrou pessimiste planning_write_mutex
+      → decode(payload)            (4) JSON → Agenda (agrégat ET tous les autres agendas)
+      → Agenda.addSlots            (5) règles métier du domaine
+      → PlanningJournal.record     (6) audit + outbox, propagation MANDATORY
+```
+
+Les étapes (1) à (6) lèvent des `PlanningException` correctement traduites (400/403/404/409),
+mais **toute autre exception** (persistance, verrou, sérialisation) tombait dans le 500 muet.
+
+### Ce qui a changé
+
+| Situation | Avant | Après |
+|---|---|---|
+| N'importe quelle exception non prévue | 500 `INTERNAL_ERROR`, **aucun log** | 500 `INTERNAL_ERROR` + `ERROR` avec méthode, URI, classe, message et stack trace |
+| Verrou pessimiste perdu / attente trop longue (`ConcurrencyFailureException`, `QueryTimeoutException`) | 500 muet | 409 `CONCURRENT_UPDATE` (« merci de rejouer la requête ») |
+| Base injoignable (`TransientDataAccessException`, `NonTransientDataAccessResourceException` dont hérite `CannotGetJdbcConnectionException`) | 500 muet | 503 `DATABASE_UNAVAILABLE` |
+| Contrainte SQL violée (`DataIntegrityViolationException`) | 500 muet | 409 `DATA_CONFLICT` |
+| Invariant applicatif cassé (`IllegalStateException`, ex. agenda illisible) | 500 `INTERNAL_ERROR` sans détail | 500 `APPLICATION_STATE_ERROR` avec le message (dont l'identifiant d'agenda) |
+| Un **autre** agenda illisible en base | faisait échouer *toutes* les écritures du planning | ignoré + `ERROR` journalisé (le contrôle anti double réservation inter-praticiens continue sur les agendas lisibles) |
+| Rendez-vous orphelin (créneau supprimé) | `PLANNING_NOT_FOUND` « Creneau introuvable » trompeur, déclenché par le contrôle inter-praticiens sur une écriture sans rapport | ignoré pour la comparaison de plages |
+| Ligne `planning_write_mutex` absente | `IllegalStateException: Verrou planning absent` → 500 définitif sur toutes les écritures | recréée à la volée (`WARN`), puis verrouillage normal |
+| `site` absent ou vide dans le corps de requête | `InvalidDataAccessApiUsageException` (`findById(null)`) → 500 | 400 `PLANNING_INVALID` « Lieu d'exercice inconnu » |
+
+Les refus métier (400/403/404/409) sont désormais aussi tracés, au niveau `DEBUG`
+(`logging.level.com.prdv.rdv=DEBUG`, ou profil `dev`).
+
+### Étape 1 — lire le log serveur
+
+Relancer la requête puis chercher la ligne émise par le handler :
+
+```
+ERROR c.p.r.common.web.GlobalExceptionHandler : POST /api/v1/planning/agenda/slots -> <classe> : <message>
+<stack trace complète>
+```
+
+La classe affichée donne directement la famille de panne :
+
+| Classe dans le log | Signification | Action |
+|---|---|---|
+| `IllegalStateException: Lecture de l'agenda N impossible` | payload JSON corrompu ou écrit par un ancien schéma dans `planning_agendas` | voir « Réparer un agenda illisible » ci-dessous |
+| `IllegalStateException: Verrou planning demandé hors d'une transaction active` | un appel à `AgendaStore` ne passe pas par le proxy `@Transactional` | vérifier que la mutation passe par `JpaAgendaStore.update` / `create` |
+| `PessimisticLockingFailureException`, `CannotAcquireLockException`, `DeadlockLoserDataAccessException`, `QueryTimeoutException` | contention sur le verrou d'écriture global (plusieurs `POST` parallèles du frontend, ou worker `WaitingOfferWorker`) | désormais 409 rejouable : sérialiser les appels côté frontend ; en dev, `prdv.planning.waiting-offers.enabled=false` |
+| `CannotGetJdbcConnectionException`, `DataAccessResourceFailureException` | base injoignable / pool Hikari épuisé | voir la section « Communications link failure » |
+| `DataIntegrityViolationException` | contrainte SQL (ex. colonne `nullable=false` alimentée à `NULL`) | lire la contrainte nommée dans la stack trace |
+| `TransactionRequiredException` | `PlanningJournal.record` (propagation `MANDATORY`) appelé hors transaction | même cause que « hors d'une transaction active » |
+| `NullPointerException` | anomalie de code : la stack trace pointe la ligne exacte | à corriger (le 500 reste renvoyé, mais tracé) |
+
+### Étape 2 — vérifier les trois prérequis données
+
+Console H2 (`http://localhost:8080/h2-console`) ou Adminer (`http://localhost:8081`) :
+
+```sql
+-- (a) Le verrou global doit contenir exactement une ligne (id = 1)
+SELECT * FROM planning_write_mutex;
+
+-- (b) Tous les payloads doivent être du JSON décodable (une ligne illisible
+--     était auparavant fatale à toutes les écritures ; elle est maintenant ignorée + journalisée)
+SELECT practitioner_id, version, LENGTH(payload) AS octets, LEFT(payload, 60) AS debut
+FROM planning_agendas;
+
+-- (c) Le "site" envoyé par le frontend doit être un ID existant ET rattaché au praticien du JWT
+SELECT id, practitioner_user_id, name, city FROM profile_practice_locations;
+```
+
+**Réparer un agenda illisible** (dev uniquement — l'agrégat est perdu) :
+
+```sql
+DELETE FROM planning_agendas WHERE practitioner_id = <id>;
+```
+
+puis rouvrir l'agenda : `POST /api/v1/planning/agenda`.
+
+### Étape 3 — vérifier le contrat de la requête
+
+Ces erreurs renvoient 400/403/404 (pas 500), mais elles sont les plus fréquentes côté frontend :
+
+```http
+POST http://localhost:8080/api/v1/planning/agenda/slots
+Authorization: Bearer <practitionerAccessToken>
+Content-Type: application/json
+
+[
+  {
+    "id": "6f1c2b90-6d0e-4a5b-9c3d-2b8f0a1e7d55",
+    "site": "<ID du lieu d'exercice, pas son libellé>",
+    "start": "2026-10-20T09:00:00Z",
+    "end": "2026-10-20T09:30:00Z",
+    "type": "NORMAL",
+    "audience": "ALL"
+  }
+]
+```
+
+| Exigence | Erreur si absente |
+|---|---|
+| Le corps est un **tableau** (1 à 500 créneaux), pas un objet `{ "slots": [...] }` | 400 `VALIDATION_ERROR` (« Requete invalide : JSON parse error ») |
+| `id` : UUID **fourni par le client**, non présent dans l'agenda | 400 si absent ; 409 `PLANNING_CONFLICT` « Identifiant dupliqué » si déjà connu |
+| `site` : identifiant d'un `PracticeLocation` **appartenant au praticien authentifié** (créé via `/api/v1/locations`) | 400 `PLANNING_INVALID` « Lieu d'exercice inconnu » ; 403 `PLANNING_FORBIDDEN` « Ce lieu n'appartient pas au praticien » |
+| `start` / `end` : instants ISO-8601 **avec fuseau** (`...Z` ou `+03:00`). Une date/heure locale nue (`2026-10-20T09:00:00`) est refusée | 400 `VALIDATION_ERROR` |
+| `start` strictement dans le futur, `start < end` | 400 `PLANNING_INVALID` « Creneau passe » / « Creneau invalide » |
+| `type` ∈ `NORMAL, FIRST_VISIT, FOLLOW_UP, EMERGENCY, TELECONSULTATION, HOME_VISIT, TECHNICAL_ACT, MEETING, ADMINISTRATIVE, ABSENCE` ; `audience` ∈ `ALL, NEW_PATIENTS, KNOWN_PATIENTS` (majuscules) | 400 `VALIDATION_ERROR` |
+| Aucun chevauchement avec les créneaux existants (marge de trajet inter-sites comprise) | 409 `PLANNING_CONFLICT` « Chevauchement ou trajet insuffisant » |
+| Rôle `PRACTITIONER` sur le JWT | 403 `FORBIDDEN` |
+| Agenda ouvert au préalable : `POST /api/v1/planning/agenda` | 404 `PLANNING_NOT_FOUND` « Agenda introuvable » |
+
+Un `POST` dupliqué par le frontend (double invocation d'effet React en `StrictMode`,
+retry automatique) n'aboutit pas à un 500 : le second appel échoue en 409
+« Identifiant dupliqué » puisque l'UUID est généré côté client.
+
+### Tests de non-régression
+
+- `common/web/GlobalExceptionHandlerTest` — journalisation et statuts (409/503/500 détaillé),
+  absence de mapping `@ExceptionHandler` ambigu, choix du handler le plus spécifique ;
+- `planning/adapter/out/persistence/JpaAgendaStoreTest#unreadableNeighbouringAgendaDoesNotBlockWrites`
+  — un agenda tiers illisible ne bloque plus les écritures ;
+- `planning/adapter/out/profile/ProfilePracticeSiteAccessTest#rejectsMissingSiteWithoutQueryingTheRepository`
+  — `site` nul/vide → `PlanningException(INVALID)` sans jamais appeler `findById(null)` ;
+- `planning/e2e/PlanningApiE2ETest#slotCreationReportsFrontendMistakesWithExplicitStatuses`
+  — contrat HTTP complet de `POST /agenda/slots` (404, 400, 403, 400, 200).

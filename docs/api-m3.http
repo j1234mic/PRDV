@@ -9,6 +9,25 @@
 POST {{base}}/agenda
 Authorization: Bearer {{doctorToken}}
 
+### Ajouter des créneaux unitaires (corps = TABLEAU de 1 à 500 créneaux)
+### id : UUID généré par le client ; site : ID du lieu créé via /api/v1/locations ;
+### start/end : instants ISO-8601 AVEC fuseau, strictement dans le futur, sans chevauchement.
+### Réponses : 200 (liste des créneaux de l'agenda), 400 lieu inconnu/créneau passé,
+### 403 lieu d'un autre praticien, 404 agenda non ouvert, 409 chevauchement ou UUID dupliqué.
+POST {{base}}/agenda/slots
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+[{"id":"6f1c2b90-6d0e-4a5b-9c3d-2b8f0a1e7d55","site":"{{site}}","start":"2026-11-02T09:00:00Z","end":"2026-11-02T09:30:00Z","type":"NORMAL","audience":"ALL"}]
+
+### Lister mes créneaux (lecture seule, sans verrou d'écriture)
+GET {{base}}/agenda/slots
+Authorization: Bearer {{doctorToken}}
+
+### Supprimer un créneau sans rendez-vous
+DELETE {{base}}/agenda/slots/6f1c2b90-6d0e-4a5b-9c3d-2b8f0a1e7d55
+Authorization: Bearer {{doctorToken}}
+
 ### Générer des matinées (adapter les dates futures ; site = lieu créé via /api/v1/locations)
 POST {{base}}/agenda/patterns
 Authorization: Bearer {{doctorToken}}
