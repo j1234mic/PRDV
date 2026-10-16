@@ -10,6 +10,10 @@ public class ProfilePracticeSiteAccess implements PracticeSiteAccess {
     private final PracticeLocationRepository locations;
     public ProfilePracticeSiteAccess(PracticeLocationRepository locations) { this.locations=locations; }
     public void requireOwned(Long practitioner,String site) {
+        // findById(null) remonte InvalidDataAccessApiUsageException (500 INTERNAL_ERROR) :
+        // un identifiant de lieu absent ou vide est une erreur de requete, donc 400.
+        PlanningException.require(site != null && !site.isBlank(), PlanningException.Code.INVALID,
+                "Lieu d'exercice inconnu");
         var location=locations.findById(site).orElseThrow(() -> new PlanningException(PlanningException.Code.INVALID,"Lieu d'exercice inconnu"));
         PlanningException.require(practitioner.equals(location.getPractitionerUserId()),PlanningException.Code.FORBIDDEN,
                 "Ce lieu n'appartient pas au praticien");

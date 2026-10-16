@@ -20,4 +20,20 @@ class ProfilePracticeSiteAccessTest {
         assertThatThrownBy(() -> access.requireOwned(2L,site.getId())).isInstanceOf(PlanningException.class).hasMessageContaining("appartient");
         assertThatThrownBy(() -> access.requireOwned(1L,"unknown")).isInstanceOf(PlanningException.class).hasMessageContaining("inconnu");
     }
+    /**
+     * Un identifiant de lieu absent du corps de requete ne doit jamais atteindre Spring Data :
+     * {@code findById(null)} remonte {@code InvalidDataAccessApiUsageException}, traduit en
+     * 500 INTERNAL_ERROR au lieu d'un 400 explicite.
+     */
+    @Test void rejectsMissingSiteWithoutQueryingTheRepository() {
+        var repository=mock(PracticeLocationRepository.class);
+        var access=new ProfilePracticeSiteAccess(repository);
+        for (String site : new String[]{null,"","   "}) {
+            assertThatThrownBy(() -> access.requireOwned(1L,site))
+                    .isInstanceOfSatisfying(PlanningException.class,
+                            e -> assertThat(e.code()).isEqualTo(PlanningException.Code.INVALID))
+                    .hasMessageContaining("Lieu d'exercice");
+        }
+        verifyNoInteractions(repository);
+    }
 }
