@@ -28,3 +28,6 @@ target/
 
 # Spring
 HELP.md
+
+# Dependances des outils de verification statique
+node_modules/

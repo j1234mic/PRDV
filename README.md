@@ -377,3 +377,24 @@ src/main/java/com/prdv/rdv/
     │       └── event/           Publication/écoute Spring
     └── config/                  ProfileProperties, beans de domaine
 ```
+
+## Module 3 — Gestion agenda & planning
+
+Contexte hexagonal `planning` : agenda multi-sites, motifs/questionnaires,
+modèles nommés, récurrence, duplication, fermeture de plages libres et import ICS.
+Réservation protégée contre les conflits inter-praticiens, report sans annulation,
+liste d'attente avec propositions temporaires, check-in, retards et file virtuelle.
+Audit et notifications privées transactionnels ; SMTP optionnel avec outbox/retry.
+
+- [Architecture, couverture et limites restantes](docs/ARCHITECTURE-M3.md)
+- [Exemples HTTP](docs/api-m3.http)
+- API : `/api/v1/planning/**`, authentification IAM existante.
+- `mvn verify` : tests unitaires, JPA/concurrence et E2E HTTP.
+- Modèle CI Java 17/H2 + concurrence MySQL : `docs/workflows/planning-ci.yml`
+  (à copier vers `.github/workflows/ci.yml` avec la permission GitHub `workflows`).
+- [Smoke sans Spring](tools/planning/README.md) : **15 contrôles exécutés avec succès**.
+
+**Le module n'est pas encore complet** : UI, synchronisations distantes,
+paiement, bénéficiaires autorisés et intégration RGPD restent notamment à réaliser.
+Le build Maven/Spring/JPA/E2E n'a pas été exécuté dans le sandbox ; seule la
+compilation portable du domaine/application et le smoke ont pu y être validés.

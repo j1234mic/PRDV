@@ -37,3 +37,8 @@ prdv:
       local-path: ./target/test-storage/profile
       # Cle de test (chiffrement au repos des fichiers medicaux, obligatoire au demarrage)
       encryption-key: test-profile-storage-key-0123456789-test
+  planning:
+    waiting-offers:
+      enabled: false
+    notifications:
+      email-enabled: false

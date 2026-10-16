@@ -30,6 +30,20 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(com.prdv.rdv.planning.domain.PlanningException.class)
+    public ResponseEntity<ApiError> handlePlanning(com.prdv.rdv.planning.domain.PlanningException ex,
+                                                   HttpServletRequest request) {
+        int status = switch (ex.code()) {
+            case NOT_FOUND -> 404;
+            case FORBIDDEN -> 403;
+            case CONFLICT -> 409;
+            case INVALID -> 400;
+            case UNAVAILABLE -> 503;
+        };
+        return ResponseEntity.status(status).body(ApiError.of(status, "PLANNING_" + ex.code().name(),
+                ex.getMessage(), request.getRequestURI()));
+    }
+
     @ExceptionHandler(IamException.class)
     public ResponseEntity<ApiError> handleIam(IamException ex, HttpServletRequest request) {
         IamErrorCode code = ex.getErrorCode();
