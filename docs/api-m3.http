@@ -1,0 +1,182 @@
+### Variables : identifiants IAM / jetons réels ; remplacer les UUID retournés
+@base = http://localhost:8080/api/v1/planning
+@practitioner = 1
+@site = REPLACE_WITH_OWNED_LOCATION_ID
+@doctorToken = REPLACE_WITH_DOCTOR_JWT
+@patientToken = REPLACE_WITH_PATIENT_JWT
+
+### Ouvrir mon agenda
+POST {{base}}/agenda
+Authorization: Bearer {{doctorToken}}
+
+### Générer des matinées (adapter les dates futures ; site = lieu créé via /api/v1/locations)
+POST {{base}}/agenda/patterns
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{"from":"2026-11-02","until":"2026-11-06","zone":"Indian/Antananarivo","weekdays":["MONDAY","WEDNESDAY","FRIDAY"],"dayOfMonth":null,"opening":"09:00","closing":"12:00","site":"{{site}}","type":"NORMAL","audience":"ALL","pathology":null,"multiplier":1}
+
+### Disponibilités consolidées (ou &site=cabinet-a)
+GET {{base}}/{{practitioner}}/availability?from=2026-11-02T00:00:00Z&to=2026-11-07T00:00:00Z&firstAvailable=true
+Authorization: Bearer {{patientToken}}
+
+### Réserver : utiliser le slot retourné ci-dessus
+POST {{base}}/{{practitioner}}/appointments
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{"slot":"REPLACE_WITH_SLOT_UUID","firstVisit":false,"intake":{"beneficiary":"Moi","reason":"Suivi","symptoms":null,"questionnaire":{},"documents":[],"teleconsultationConsent":false,"communication":"EMAIL"}}
+
+### Mes RDV (le praticien voit tous les siens)
+GET {{base}}/{{practitioner}}/appointments
+Authorization: Bearer {{patientToken}}
+
+### Détail complet privé
+GET {{base}}/{{practitioner}}/appointments/REPLACE_WITH_APPOINTMENT_UUID
+Authorization: Bearer {{patientToken}}
+
+### Export calendrier (pas une synchronisation)
+GET {{base}}/{{practitioner}}/appointments/REPLACE_WITH_APPOINTMENT_UUID/calendar
+Authorization: Bearer {{patientToken}}
+
+### Report atomique
+POST {{base}}/{{practitioner}}/appointments/REPLACE_WITH_APPOINTMENT_UUID/reschedule
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{"slot":"REPLACE_WITH_NEW_SLOT_UUID","firstVisit":false}
+
+### Annuler
+POST {{base}}/{{practitioner}}/appointments/REPLACE_WITH_APPOINTMENT_UUID/cancel
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{"reason":"Indisponible"}
+
+### Check-in (H−1 au plus tôt)
+POST {{base}}/{{practitioner}}/appointments/REPLACE_WITH_APPOINTMENT_UUID/status
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{"status":"CHECKED_IN"}
+
+### Appel praticien (puis COMPLETED)
+POST {{base}}/{{practitioner}}/appointments/REPLACE_WITH_APPOINTMENT_UUID/status
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{"status":"CALLED"}
+
+### Ma position / estimation
+GET {{base}}/{{practitioner}}/queue
+Authorization: Bearer {{patientToken}}
+
+### Liste d'attente si aucune disponibilité dans l'intervalle
+POST {{base}}/{{practitioner}}/waiting-list
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{"from":"2026-11-02T00:00:00Z","to":"2026-11-03T00:00:00Z","site":"{{site}}","type":"NORMAL","urgent":false,"automaticOffer":true,"communication":"IN_APP"}
+
+### Candidats classés, accessibles seulement au praticien propriétaire
+GET {{base}}/agenda/slots/REPLACE_WITH_SLOT_UUID/candidates
+Authorization: Bearer {{doctorToken}}
+
+### Attribution manuelle (même corps que la réservation)
+POST {{base}}/agenda/waiting-list/REPLACE_WITH_WAITING_UUID/assign
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{"slot":"REPLACE_WITH_SLOT_UUID","firstVisit":false,"intake":{"beneficiary":"Patient","reason":"Suivi","symptoms":null,"questionnaire":{},"documents":[],"teleconsultationConsent":false,"communication":"EMAIL"}}
+
+### Quitter la liste
+DELETE {{base}}/{{practitioner}}/waiting-list/me
+Authorization: Bearer {{patientToken}}
+
+
+### Enregistrer un modèle nommé (ne crée pas encore les créneaux)
+PUT {{base}}/agenda/templates/matinees
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{"from":"2026-12-01","until":"2026-12-07","zone":"Indian/Antananarivo","weekdays":["MONDAY","WEDNESDAY"],"dayOfMonth":null,"opening":"09:00","closing":"12:00","site":"{{site}}","type":"NORMAL","audience":"ALL","pathology":null,"multiplier":1}
+
+### Appliquer à une autre période (échec atomique s'il y a un conflit)
+POST {{base}}/agenda/templates/matinees/apply
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{"from":"2026-12-14","until":"2026-12-20"}
+
+### Dupliquer une période, décalage en jours UTC
+POST {{base}}/agenda/duplicate
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{"from":"2026-12-14T00:00:00Z","to":"2026-12-21T00:00:00Z","shiftDays":7}
+
+### Motif et questions obligatoires : intake.reason doit ensuite valoir "suivi"
+PUT {{base}}/agenda/reasons/suivi
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{"id":"suivi","label":"Consultation de suivi","type":"NORMAL","minutes":30,"requiredQuestions":["allergies"],"documents":["Ordonnance actuelle"]}
+
+### Motifs disponibles
+GET {{base}}/{{practitioner}}/reasons
+Authorization: Bearer {{patientToken}}
+
+### Fermer une plage libre (refus si un RDV/proposition y est rattaché)
+POST {{base}}/agenda/closures
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{"site":"{{site}}","from":"2026-12-28T06:00:00Z","to":"2026-12-28T09:00:00Z","type":"ABSENCE"}
+
+### Déclarer un retard par site
+PUT {{base}}/agenda/delay
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{"site":"{{site}}","minutes":20}
+
+### Import ICS strict : événements UTC non récurrents, en plages bloquées
+POST {{base}}/agenda/import?site={{site}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: text/calendar
+
+BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:formation-20261229
+DTSTART:20261229T060000Z
+DTEND:20261229T090000Z
+END:VEVENT
+END:VCALENDAR
+
+### Mes propositions temporaires privées
+GET {{base}}/{{practitioner}}/waiting-list/offers
+Authorization: Bearer {{patientToken}}
+
+### Accepter avant expiration, avec le questionnaire et consentement nécessaires
+POST {{base}}/{{practitioner}}/waiting-list/offers/REPLACE_WITH_OFFER_UUID/accept
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{"intake":{"beneficiary":"Moi","reason":"suivi","symptoms":null,"questionnaire":{"allergies":"Aucune"},"documents":[],"teleconsultationConsent":false,"communication":"IN_APP"}}
+
+### Refuser : quitte la liste pour éviter une reproposition en boucle
+POST {{base}}/{{practitioner}}/waiting-list/offers/REPLACE_WITH_OFFER_UUID/decline
+Authorization: Bearer {{patientToken}}
+
+### Boîte de notifications (in-app toujours disponible, email seulement si configuré/demandé)
+GET {{base}}/notifications?page=0&size=25
+Authorization: Bearer {{patientToken}}
+
+### Marquer une notification lue
+POST {{base}}/notifications/REPLACE_WITH_NOTIFICATION_UUID/read
+Authorization: Bearer {{patientToken}}
+
+### Mon journal d'audit, jamais celui d'un autre praticien
+GET {{base}}/agenda/audit?page=0&size=25
+Authorization: Bearer {{doctorToken}}
