@@ -52,7 +52,7 @@ public class PracticeLocationEntity {
     @Column(length = 120)
     private String city;
 
-    @Column(length = 3)
+    @Column(length = 100)
     private String country;
 
     private Double latitude;
